@@ -71,7 +71,6 @@ elif page == "📊 Analyse DVF - Marché de Nice":
     st.title("📊 Analyse DVF - Marché Immobilier de Nice")
     st.markdown("Exploitez vos extraits DVF pour vos avis de valeur et études de marché.")
     
-    # Importation simple sans restriction stricte de type pour débloquer Android/Samsung
     uploaded_files = st.file_uploader("📁 Importer vos fichiers DVF (CSV)", accept_multiple_files=True)
 
     if uploaded_files:
@@ -89,27 +88,24 @@ elif page == "📊 Analyse DVF - Marché de Nice":
             ])
             
             with tab1:
-                st.subheader("Recherche par rue ou adresse précise")
-                st.markdown("Retrouvez le prix réel des ventes notariales par rue pour préparer vos avis de valeur.")
+                st.subheader("Recherche par rue, mot-clé ou adresse")
+                st.markdown("Retrouvez le prix réel des ventes notariales en filtrant par nom de rue (ex: *Anglais*, *France*, *Massena*).")
                 
-                recherche_rue = st.text_input("Entrez un nom de rue (ex: Anglais, France, Massena, Boron) :")
+                recherche_rue = st.text_input("Entrez un terme de recherche :")
                 
                 if recherche_rue:
-                    col_voie = [c for c in df_brut.columns if 'voie' in c.lower() or 'adresse' in c.lower() or 'rue' in c.lower()]
-                    if col_voie:
-                        mask = df_brut[col_voie[0]].astype(str).str.contains(recherche_rue, case=False, na=False)
-                        df_resultats = df_brut[mask]
-                        
-                        st.metric("Transactions trouvées pour cette recherche", f"{len(df_resultats):,}")
-                        if not df_resultats.empty:
-                            colonnes_affichage = [c for c in ['date_mutation', 'valeur_fonciere', 'adresse_nom_voie', 'type_local', 'surface_reelle_bati'] if c in df_resultats.columns]
-                            st.dataframe(df_resultats[colonnes_affichage].head(100), use_container_width=True)
-                        else:
-                            st.warning("Aucune transaction trouvée pour cette rue dans vos fichiers.")
+                    # Recherche intelligente dans l'ensemble des colonnes textuelles du fichier
+                    masque_global = df_brut.astype(str).apply(lambda col: col.str.contains(recherche_rue, case=False, na=False)).any(axis=1)
+                    df_resultats = df_brut[masque_global]
+                    
+                    st.metric("Transactions correspondantes trouvées", f"{len(df_resultats):,}")
+                    if not df_resultats.empty:
+                        colonnes_affichage = [c for c in ['date_mutation', 'valeur_fonciere', 'adresse_nom_voie', 'type_local', 'surface_reelle_bati'] if c in df_resultats.columns]
+                        st.dataframe(df_resultats[colonnes_affichage].head(100), use_container_width=True)
                     else:
-                        st.error("Colonne d'adresse introuvable.")
+                        st.warning("Aucun résultat ne correspond à votre recherche dans ces fichiers.")
                 else:
-                    st.info("💡 Saisissez un mot-clé ou un nom de rue ci-dessus pour interroger la base notariale.")
+                    st.info("💡 Saisissez un mot-clé ci-dessus (nom de rue, etc.) pour filtrer la base notariale.")
                     st.markdown("#### 🔍 Aperçu des transactions importées :")
                     colonnes_affichage = [c for c in ['date_mutation', 'valeur_fonciere', 'adresse_nom_voie', 'type_local', 'surface_reelle_bati'] if c in df_brut.columns]
                     st.dataframe(df_brut[colonnes_affichage].head(20), use_container_width=True)
