@@ -10,7 +10,7 @@ page = st.sidebar.radio("Aller à la section", [
     "Analyse des Secteurs Phares (US)", 
     "Suivi des Profils Acquéreurs", 
     "📄 Générateur de Lead - Guide Retraite",
-    "📊 Analyse DVF - Vraies Ventes (Ciblé)"
+    "📊 Analyse DVF - Vraies Ventes (Ultra Léger)"
 ])
 
 if page == "Analyse des Secteurs Phares (US)":
@@ -67,82 +67,48 @@ elif page == "📄 Générateur de Lead - Guide Retraite":
         5. **Call-to-Action:** "Contact your dedicated Riviera real estate expert."
         """)
 
-elif page == "📊 Analyse DVF - Vraies Ventes (Ciblé)":
-    st.title("📊 Analyse DVF - Vraies Ventes de l'État (Nice Premium)")
-    st.markdown("Ce module filtre **uniquement** vos secteurs de prédilection en analysant le nom des rues sur les données officielles.")
+elif page == "📊 Analyse DVF - Vraies Ventes (Ultra Léger)":
+    st.title("📊 Analyse DVF - Mode Ultra Léger (Anti-Blocage)")
+    st.markdown("Ce mode analyse vos fichiers **un par un** en filtrant instantanément les données pour ne pas faire saturer votre tablette.")
     
-    # Gestion de la mémoire globale
-    if 'liste_dfs_memoire' not in st.session_state:
-        st.session_state.liste_dfs_memoire = []
+    uploaded_file = st.sidebar.file_uploader("Importer un fichier CSV DVF (Faites-les un par un)", type=['csv'])
 
-    st.sidebar.markdown("---")
-    st.sidebar.warning("📁 **Importation multi-fichiers débloquée**")
-    
-    # MODIFICATION CLÉ : accept_multiple_files=True activé
-    fichiers_ajoutes = st.sidebar.file_uploader("Ajouter un ou plusieurs fichiers CSV", type=None, accept_multiple_files=True, key="import_multiple")
-
-    colonnes_utiles = ['date_mutation', 'valeur_fonciere', 'nom_commune', 'adresse_nom_voie', 'type_local', 'surface_reelle_bati']
-
-    def filtrer_nice_premium(df_brut):
-        if 'nom_commune' not in df_brut.columns:
-            return pd.DataFrame()
-            
-        df_nice = df_brut[df_brut['nom_commune'].str.contains('Nice', case=False, na=False)].copy()
-        df_nice = df_nice.dropna(subset=['valeur_fonciere', 'adresse_nom_voie'])
-        
-        def identifier_secteur(rue):
-            rue = str(rue).upper()
-            if 'ANGLAIS' in rue:
-                return "Promenade des Anglais"
-            elif any(mot in rue for mot in ['BORON', 'ALBAN', 'BATTERIE', 'FORESTIER', 'MACCARANI']):
-                return "Mont Boron"
-            elif any(mot in rue for mot in ['FRANCE', 'BUFFA', 'MASSENA', 'GRIMALDI', 'PARADIS', 'KARR', 'HALEVY', 'SUEDE', 'CONGRES', 'RIVOLI', 'MEDECIN', 'VICTOR HUGO']):
-                return "Carré d'Or"
+    if uploaded_file is not None:
+        try:
+            with st.spinner("Filtrage intelligent en cours..."):
+                # Lecture optimisée : on ne charge que les colonnes strictement nécessaires
+                colonnes = ['date_mutation', 'valeur_fonciere', 'nom_commune', 'adresse_nom_voie', 'type_local', 'surface_reelle_bati']
+                df_brut = pd.read_csv(uploaded_file, usecols=lambda c: c in colonnes, low_memory=False)
+                
+                # Filtrage direct sur Nice
+                df_nice = df_brut[df_brut['nom_commune'].str.contains('Nice', case=False, na=False)].copy()
+                df_nice = df_nice.dropna(subset=['valeur_fonciere', 'adresse_nom_voie'])
+                
+                def identifier_secteur(rue):
+                    rue = str(rue).upper()
+                    if 'ANGLAIS' in rue:
+                        return "Promenade des Anglais"
+                    elif any(mot in rue for mot in ['BORON', 'ALBAN', 'BATTERIE', 'FORESTIER', 'MACCARANI']):
+                        return "Mont Boron"
+                    elif any(mot in rue for mot in ['FRANCE', 'BUFFA', 'MASSENA', 'GRIMALDI', 'PARADIS', 'KARR', 'HALEVY', 'SUEDE', 'CONGRES', 'RIVOLI', 'MEDECIN', 'VICTOR HUGO']):
+                        return "Carré d'Or"
+                    else:
+                        return "Hors Cible"
+                
+                df_nice['Quartier_Cible'] = df_nice['adresse_nom_voie'].apply(identifier_secteur)
+                df_filtered = df_nice[df_nice['Quartier_Cible'] != "Hors Cible"].copy()
+                df_filtered['valeur_fonciere'] = df_filtered['valeur_fonciere'].astype(int)
+                
+            if not df_filtered.empty:
+                st.success(f"✅ Fichier validé : {len(df_filtered)} transactions pertinentes trouvées dans vos secteurs cibles !")
+                st.dataframe(df_filtered.sort_values(by='date_mutation', ascending=False), use_container_width=True)
+                
+                prix_moyen = int(df_filtered['valeur_fonciere'].mean())
+                st.metric("Prix moyen de cette sélection", f"{prix_moyen:,} €".replace(',', ' '))
             else:
-                return "Hors Cible"
-        
-        df_nice['Quartier_Cible'] = df_nice['adresse_nom_voie'].apply(identifier_secteur)
-        df_premium = df_nice[df_nice['Quartier_Cible'] != "Hors Cible"].copy()
-        df_premium['valeur_fonciere'] = df_premium['valeur_fonciere'].astype(int)
-        return df_premium
-
-    # Traitement des fichiers dès qu'ils sont sélectionnés
-    if fichiers_ajoutes:
-        for f in fichiers_ajoutes:
-            try:
-                df_temp = pd.read_csv(f, low_memory=False)
-                # On évite les doublons en vérifiant le nom du fichier s'il est présent
-                st.session_state.liste_dfs_memoire.append(df_temp)
-            except Exception as e:
-                pass
-        st.sidebar.success(f"Fichiers pris en compte ! Total en mémoire : {len(st.session_state.liste_dfs_memoire)}")
-
-    if st.session_state.liste_dfs_memoire:
-        if st.sidebar.button("🗑️ Vider la mémoire de tous les fichiers"):
-            st.session_state.liste_dfs_memoire = []
-            st.rerun()
-
-    df_reelles = None
-    if st.session_state.liste_dfs_memoire:
-        df_raw = pd.concat(st.session_state.liste_dfs_memoire, ignore_index=True)
-        df_reelles = filtrer_nice_premium(df_raw)
-        st.info(f"💾 **{len(st.session_state.liste_dfs_memoire)} fichier(s)** au total dans l'application.")
-
-    if df_reelles is not None and not df_reelles.empty:
-        st.success(f"Opération réussie ! {len(df_reelles)} transactions trouvées dans vos secteurs cibles.")
-        
-        secteurs = ["Tous les secteurs cibles"] + list(df_reelles['Quartier_Cible'].unique())
-        choix_secteur = st.selectbox("Filtrer par secteur précis :", secteurs)
-        
-        if choix_secteur != "Tous les secteurs cibles":
-            df_affiche = df_reelles[df_reelles['Quartier_Cible'] == choix_secteur]
-        else:
-            df_affiche = df_reelles
-
-        st.dataframe(df_affiche.sort_values(by='date_mutation', ascending=False)[['date_mutation', 'Quartier_Cible', 'adresse_nom_voie', 'type_local', 'surface_reelle_bati', 'valeur_fonciere']], use_container_width=True)
-        
-        if not df_affiche.empty:
-            prix_moyen = int(df_affiche['valeur_fonciere'].mean())
-            st.metric(f"Prix moyen constaté dans la sélection", f"{prix_moyen:,} €".replace(',', ' '))
+                st.info("ℹ️ Ce fichier ne contient pas de transactions correspondant aux secteurs cibles (Carré d'Or, Promenade, Mont Boron). Vous pouvez passer au suivant.")
+                
+        except Exception as e:
+            st.error(f- "Erreur de lecture sur ce fichier. Essayez de passer au suivant.")
     else:
-        st.warning("⚠️ Aucun fichier n'a encore été chargé. Utilisez le bouton dans la barre latérale pour importer vos fichiers.")
+        st.warning("⚠️ Veuillez importer un fichier CSV via le panneau latéral. Procédez **un par un** pour éviter toute saturation de la tablette.")
