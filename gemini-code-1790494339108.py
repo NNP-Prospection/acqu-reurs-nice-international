@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import glob
+import os
 
 # Configuration de la page
 st.set_page_config(page_title="Espace Acquéreurs & DVF - Nice", layout="wide")
@@ -69,91 +70,107 @@ elif page == "📄 Générateur de Lead - Guide Retraite":
         """)
 
 elif page == "📊 Analyse DVF - Marché de Nice":
-    st.title("📊 Analyse DVF - Marché Immobilier de Nice")
-    st.markdown("Exploitation intelligente des fichiers DVF (gestion des lots multiples et calculs précis).")
+    st.title("📊 Analyse DVF - Marché Immobilier de Nice & Sous-Secteurs")
+    st.markdown("Exploitation avancée avec distinction des micro-localisations (ex: Mont Boron Sélect vs Périphérique).")
     
-    @st.cache_data(show_spinner="Chargement automatique des fichiers DVF...")
-    def charger_fichiers_depot():
+    @st.cache_data(show_spinner="Chargement et nettoyage intelligent des fichiers DVF...")
+    def charger_et_nettoyer_fichiers():
         fichiers_csv = glob.glob("*.csv") + glob.glob("**/*.csv", recursive=True)
         if not fichiers_csv:
             return None
+        
         liste_df = []
         for f in fichiers_csv:
             try:
-                df_temp = pd.read_csv(f, low_memory=False, on_bad_lines='skip')
+                # Lecture robuste gérant les séparateurs point-virgule ou virgule
+                df_temp = pd.read_csv(f, low_memory=False, sep=None, engine='python', on_bad_lines='skip')
                 liste_df.append(df_temp)
             except:
                 pass
+                
         if liste_df:
-            return pd.concat(liste_df, ignore_index=True)
+            df_global = pd.concat(liste_df, ignore_index=True)
+            # Nettoyage des noms de colonnes (suppression des espaces)
+            df_global.columns = [c.strip() for c in df_global.columns]
+            return df_global
         return None
 
-    df_brut = charger_fichiers_depot()
+    df_brut = charger_et_nettoyer_fichiers()
 
     if df_brut is not None and not df_brut.empty:
-        st.success(f"✅ Base de données chargée ({len(df_brut):,} lignes brutes au total).")
+        st.success(f"✅ Base de données chargée et normalisée ({len(df_brut):,} lignes).")
 
         tab1, tab2 = st.tabs([
-            "💰 1. Analyse par Rue & Vraies Valeurs", 
-            "📈 2. Synthèse & Indicateurs Clés par Secteur"
+            "💰 1. Recherche & Analyse par Sous-Secteurs", 
+            "📈 2. Synthèse & Stratégie Clientèle"
         ])
         
         with tab1:
-            st.subheader("Recherche par rue ou secteur (ex: Mont Boron)")
-            st.markdown("Filtrez les transactions et observez les prix réels constatés par les notaires.")
+            st.subheader("Filtrage intelligent et distinction des micro-marchés")
+            st.markdown("Recherchez un secteur (ex: *Mont Boron*, *Anglais*, *France*) pour analyser finement les prix réels.")
             
-            recherche_rue = st.text_input("Entrez un nom de rue / quartier :", value="MONT BORON")
+            recherche_rue = st.text_input("Entrez un terme de recherche :", value="MONT BORON")
             
             if recherche_rue:
+                # Recherche insensible à la casse sur l'ensemble du dataframe
                 masque_global = df_brut.astype(str).apply(lambda col: col.str.contains(recherche_rue, case=False, na=False)).any(axis=1)
                 df_resultats = df_brut[masque_global].copy()
                 
-                st.metric("Lignes correspondantes trouvées", f"{len(df_resultats):,}")
+                st.metric("Transactions correspondantes trouvées", f"{len(df_resultats):,}")
                 
                 if not df_resultats.empty:
-                    # Traitement pour isoler les ventes uniques (nettoyage des doublons de lots multiples)
-                    col_valeur = [c for c in df_resultats.columns if 'valeur_fonciere' in c.lower()]
-                    col_mutation = [c for c in df_resultats.columns if 'id_mutation' in c.lower()]
-                    col_surface = [c for c in df_resultats.columns if 'surface_reelle_bati' in c.lower()]
-                    col_type = [c for c in df_resultats.columns if 'type_local' in c.lower()]
+                    # Identification des colonnes clés
+                    col_valeur = next((c for c in df_resultats.columns if 'valeur_fonciere' in c.lower() or 'prix' in c.lower()), None)
+                    col_voie = next((c for c in df_resultats.columns if 'voie' in c.lower() or 'adresse' in c.lower()), None)
+                    col_surface = next((c for c in df_resultats.columns if 'surface' in c.lower()), None)
                     
-                    if col_valeur and col_mutation:
-                        val_col = col_valeur[0]
-                        mut_col = col_mutation[0]
+                    if col_valeur:
+                        # Nettoyage de la colonne valeur foncière (remplacement des virgules par des points si besoin et conversion en nombre)
+                        df_resultats['prix_net'] = pd.to_numeric(
+                            df_resultats[col_valeur].astype(str).str.replace(',', '.').str.extract(r'([\d\.]+)', expand=False), 
+                            errors='coerce'
+                        )
                         
-                        # Convertir en numérique
-                        df_resultats[val_col] = pd.to_numeric(df_resultats[val_col], errors='coerce')
+                        # --- SOUS-CLASSEMENT STRATÉGIQUE (Exemple pour le Mont Boron) ---
+                        if "MONT BORON" in recherche_rue.upper():
+                            def classifier_mont_boron(adresse):
+                                adresse_str = str(adresse).upper()
+                                # Adresses les plus sélectes / recherchées du Mont Boron
+                                if any(terme in adresse_str for terme in ['FORESTIERE', 'ALBAN', 'MONT BORON', 'REPUBLIQUE', 'MAETERLINCK', 'CORNICHE INF', 'CORN INF', 'CORN MOY']):
+                                    return "⭐ Mont Boron - Secteur Très Sélect (Corniches / Hauteurs)"
+                                else:
+                                    return "🏡 Mont Boron - Secteur Périphérique / Abords"
+                            
+                            if col_voie:
+                                df_resultats['Sous_Secteur'] = df_resultats[col_voie].apply(classifier_mont_boron)
+                                
+                                st.markdown("### 🏆 Analyse comparative par micro-localisation (Mont Boron)")
+                                for sous_sec, groupe in df_resultats.groupby('Sous_Secteur'):
+                                    prix_moyen = groupe['prix_net'].mean()
+                                    st.markdown(f"**{sous_sec}** ({len(groupe)} transactions) — Prix moyen constaté : **{prix_moyen:,.0f} €**".replace(",", " "))
                         
-                        # Création d'une vue par vente unique (pour éviter de compter 3 fois le même prix si cave + appt)
-                        df_ventes_uniques = df_resultats.drop_duplicates(subset=[mut_col])
-                        
-                        st.markdown("#### 💎 Indicateurs calculés sur cette sélection :")
-                        c1, c2, c3 = st.columns(3)
-                        c1.metric("Nombre de ventes distinctes", f"{len(df_ventes_uniques):,}")
-                        c2.metric("Prix de vente moyen", f"{df_ventes_uniques[val_col].mean():,.0f} €".replace(",", " "))
-                        c3.metric("Prix de vente médian", f"{df_ventes_uniques[val_col].median():,.0f} €".replace(",", " "))
+                        # Indicateurs globaux sur la sélection
+                        st.markdown("#### 📊 Indicateurs de la sélection :")
+                        c1, c2 = st.columns(2)
+                        c1.metric("Prix moyen global", f"{df_resultats['prix_net'].mean():,.0f} €".replace(",", " "))
+                        c2.metric("Prix médian global", f"{df_resultats['prix_net'].median():,.0f} €".replace(",", " "))
                     
-                    st.markdown("#### 📋 Détail brut des lignes correspondantes :")
-                    colonnes_affichage = [c for c in ['date_mutation', 'valeur_fonciere', 'adresse_nom_voie', 'type_local', 'surface_reelle_bati'] if c in df_resultats.columns]
-                    if colonnes_affichage:
-                        st.dataframe(df_resultats[colonnes_affichage].head(100), use_container_width=True)
-                    else:
-                        st.dataframe(df_resultats.head(100), use_container_width=True)
+                    st.markdown("#### 📋 Détail des transactions :")
+                    st.dataframe(df_resultats.head(100), use_container_width=True)
                 else:
-                    st.warning("Aucun résultat trouvé.")
+                    st.warning("Aucun résultat trouvé pour ce terme.")
             else:
-                st.info("💡 Saisissez un mot-clé ci-dessus.")
+                st.info("💡 Saisissez un mot-clé.")
                     
         with tab2:
-            st.subheader("Analyse comparative des secteurs clés")
-            st.markdown("Positionnement stratégique pour votre clientèle à fort pouvoir d'achat.")
+            st.subheader("Synthèse & Argumentaire Clientèle")
+            st.markdown("Positionnement des biens pour vos clients à fort pouvoir d'achat.")
             
             df_synthese_marche = pd.DataFrame({
                 "Secteur Clé": ["Carré d'Or", "Promenade des Anglais", "Mont Boron"],
-                "Type de biens recherchés": ["Appartement urbain, piétonnier", "Vue mer frontale, standing", "Villas, résidences de prestige, calme"],
-                "Clientèle privilégiée": ["Actifs haut de gamme & Investisseurs", "Acquéreurs internationaux (US / Résidence secondaire)", "Amateurs de 'Quiet Luxury' & Intimité"],
-                "Atout clé pour la vente": ["Proximité immédiate des commerces et plages", "Panorama exceptionnel et mythe azuréen", "Vues panoramiques et discrétion absolue"]
+                "Micro-cibles": ["Piétonnier, Actifs, Luxe urbain", "Front de mer, Vues panoramiques", "Quiet Luxury, Adresses confidentielles"],
+                "Atout Stratégique": ["Proximité immédiate des commerces", "Mythe azuréen et standing international", "Discrétion absolue et panoramas d'exception"]
             })
             st.dataframe(df_synthese_marche, use_container_width=True)
     else:
-        st.warning("⚠️ Aucun fichier CSV détecté.")
+        st.warning("⚠️ Aucun fichier CSV détecté dans le dépôt.")
