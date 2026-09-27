@@ -9,7 +9,7 @@ st.sidebar.title("Navigation")
 page = st.sidebar.radio("Aller à la section", [
     "Analyse des Secteurs Phares (US)", 
     "Suivi des Profils Acquéreurs", 
-    "📄 Générateur de Lead - Guide Retraite", # Titre mis à jour
+    "📄 Générateur de Lead - Guide Retraite",
     "📊 Analyse DVF - Nice"
 ])
 
@@ -32,7 +32,7 @@ elif page == "Suivi des Profils Acquéreurs":
     st.markdown("Enregistrez ici vos contacts qualifiés issus des campagnes ciblées :")
     
     nom_contact = st.text_input("Nom / Référence du contact")
-    origine_ville = st.selectbox("Origine / Ville", ["France (Local/National)", "New York (JFK/EWR)", "Boston (BOS)", "Washington (IAD)", "Autre"]) # Ajout de la France
+    origine_ville = st.selectbox("Origine / Ville", ["France (Local/National)", "New York (JFK/EWR)", "Boston (BOS)", "Washington (IAD)", "Autre"])
     secteur_interet = st.selectbox("Secteur d'intérêt", ["Carré d'Or", "Promenade des Anglais", "Mont Boron"])
     budget = st.text_input("Budget estimé", placeholder="Ex: 1.5M€")
     
@@ -54,7 +54,7 @@ elif page == "📄 Générateur de Lead - Guide Retraite":
         1. **Introduction :** Pourquoi Nice est le choix n°1 des Français pour préparer leur retraite au soleil.
         2. **Stratégie Patrimoniale :** 
            - Investir tôt : L'avantage de l'amortissement LMNP (Loueur Meublé Non Professionnel).
-           - Dispositif Pinel / De Normandie : Ce qu'il faut savoir avant d'investir dans le 06.
+           - Dispositifs fiscaux : Ce qu'il faut savoir avant d'investir dans le 06.
         3. **Secteurs d'avenir :** Les quartiers niçois où investir aujourd'hui pour une forte plus-value à la retraite (ex: Eco-Vallée, Port Lympia).
         4. **Gestion Locative :** Comment sécuriser son investissement à distance avant d'y habiter.
         5. **Appel à l'action (Call-to-action) :** "Prenez rendez-vous pour une étude patrimoniale personnalisée sur la Côte d'Azur."
@@ -63,19 +63,19 @@ elif page == "📄 Générateur de Lead - Guide Retraite":
             st.success("Le plan détaillé a été copié ! Vous pouvez l'exporter vers Word ou Canva pour créer votre guide.")
 
     elif cible_retraite == "🇺🇸 Investisseurs Retraités Américains (US)":
-        st.info("💡 **Angle d'attaque :** Art de vivre, sécurité, vues exceptionnelles, et facilité d'installation.")
+        st.info("💡 **Angle d'attaque :** Art de vivre, sécurité, vues exceptionnelles, et facilité d'installation (Le contenu ci-dessous est prêt pour vos clients US).")
         st.markdown("""
-        **Trame suggérée pour le guide PDF / Article de blog :**
-        1. **Introduction :** The French Riviera Dream - Why Nice is the Ultimate Retirement Destination for US Expats.
-        2. **Lifestyle & Healthcare :** Un système de santé de classe mondiale et un art de vivre inégalé.
-        3. **Top Neighborhoods :** 
-           - Mont Boron (Quiet Luxury & Views)
-           - Carré d'Or (Walkable & Vibrant)
-        4. **Buying Process in France :** Les étapes clés pour un acheteur américain (Notaire, transferts de fonds, visas).
-        5. **Appel à l'action (Call-to-action) :** "Contact your dedicated Riviera real estate expert to start your property search today."
+        **Trame suggérée pour le guide PDF / Article de blog (en anglais) :**
+        1. **Introduction:** The French Riviera Dream - Why Nice is the Ultimate Retirement Destination for US Expats.
+        2. **Lifestyle & Healthcare:** Accessing world-class medical care and enjoying an unparalleled quality of life on the Riviera.
+        3. **Top Neighborhoods for US Buyers:** 
+           - *Mont Boron:* Quiet luxury, exclusivity, and panoramic sea views.
+           - *Carré d'Or:* High walkability, vibrant city life, and historic prestige.
+        4. **The Buying Process in France:** A clear, step-by-step guide for Americans (Understanding the 'Notaire' system, fund transfers, and retirement visa options).
+        5. **Call-to-Action:** "Contact your dedicated Riviera real estate expert to start your property search today."
         """)
         if st.button("Générer l'ébauche du texte (Version US)"):
-            st.success("Le plan détaillé a été copié ! Vous pouvez l'exporter vers Word ou Canva pour créer votre guide.")
+            st.success("Le plan détaillé en anglais a été copié ! Vous pouvez l'exporter vers Word ou Canva pour créer votre guide.")
 
 elif page == "📊 Analyse DVF - Nice":
     st.title("📊 Analyse DVF - Ville de Nice")
