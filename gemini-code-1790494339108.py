@@ -9,7 +9,7 @@ st.sidebar.title("Navigation")
 page = st.sidebar.radio("Aller à la section", [
     "Analyse des Secteurs Phares (US)", 
     "Suivi des Profils Acquéreurs", 
-    "Générateur de Lead - Guide Retraite",
+    "📄 Générateur de Lead - Guide Retraite", # Titre mis à jour
     "📊 Analyse DVF - Nice"
 ])
 
@@ -32,25 +32,55 @@ elif page == "Suivi des Profils Acquéreurs":
     st.markdown("Enregistrez ici vos contacts qualifiés issus des campagnes ciblées :")
     
     nom_contact = st.text_input("Nom / Référence du contact")
-    origine_ville = st.selectbox("Origine / Ville", ["New York (JFK/EWR)", "Boston (BOS)", "Washington (IAD)", "Autre"])
+    origine_ville = st.selectbox("Origine / Ville", ["France (Local/National)", "New York (JFK/EWR)", "Boston (BOS)", "Washington (IAD)", "Autre"]) # Ajout de la France
     secteur_interet = st.selectbox("Secteur d'intérêt", ["Carré d'Or", "Promenade des Anglais", "Mont Boron"])
     budget = st.text_input("Budget estimé", placeholder="Ex: 1.5M€")
     
     if st.button("Ajouter à la base de prospection"):
         st.success(f"Contact {nom_contact} ({origine_ville}) ajouté avec succès pour le secteur {secteur_interet} !")
 
-elif page == "Générateur de Lead - Guide Retraite":
-    st.title("📄 Générateur de Lead - Guide Retraite US sur la Côte d'Azur")
-    st.markdown("Outil d'aide à la création de contenus et de guides pour attirer les investisseurs américains à la retraite.")
-    st.info("Module en cours de chargement...")
+elif page == "📄 Générateur de Lead - Guide Retraite":
+    st.title("📄 Générateur de Lead - Guide Retraite sur la Côte d'Azur")
+    st.markdown("Outil d'aide à la création de contenus ciblés pour attirer les investisseurs préparant leur retraite (Clientèle Française et Américaine).")
+    
+    st.markdown("### 🎯 Choisissez votre cible pour générer une trame de guide :")
+    
+    cible_retraite = st.radio("Clientèle visée :", ["🇫🇷 Jeunes/Futurs Retraités Français", "🇺🇸 Investisseurs Retraités Américains (US)"], horizontal=True)
+    
+    if cible_retraite == "🇫🇷 Jeunes/Futurs Retraités Français":
+        st.info("💡 **Angle d'attaque :** Défiscalisation, constitution de patrimoine foncier, et préparation d'un complément de revenu.")
+        st.markdown("""
+        **Trame suggérée pour le guide PDF / Article de blog :**
+        1. **Introduction :** Pourquoi Nice est le choix n°1 des Français pour préparer leur retraite au soleil.
+        2. **Stratégie Patrimoniale :** 
+           - Investir tôt : L'avantage de l'amortissement LMNP (Loueur Meublé Non Professionnel).
+           - Dispositif Pinel / De Normandie : Ce qu'il faut savoir avant d'investir dans le 06.
+        3. **Secteurs d'avenir :** Les quartiers niçois où investir aujourd'hui pour une forte plus-value à la retraite (ex: Eco-Vallée, Port Lympia).
+        4. **Gestion Locative :** Comment sécuriser son investissement à distance avant d'y habiter.
+        5. **Appel à l'action (Call-to-action) :** "Prenez rendez-vous pour une étude patrimoniale personnalisée sur la Côte d'Azur."
+        """)
+        if st.button("Générer l'ébauche du texte (Version FR)"):
+            st.success("Le plan détaillé a été copié ! Vous pouvez l'exporter vers Word ou Canva pour créer votre guide.")
+
+    elif cible_retraite == "🇺🇸 Investisseurs Retraités Américains (US)":
+        st.info("💡 **Angle d'attaque :** Art de vivre, sécurité, vues exceptionnelles, et facilité d'installation.")
+        st.markdown("""
+        **Trame suggérée pour le guide PDF / Article de blog :**
+        1. **Introduction :** The French Riviera Dream - Why Nice is the Ultimate Retirement Destination for US Expats.
+        2. **Lifestyle & Healthcare :** Un système de santé de classe mondiale et un art de vivre inégalé.
+        3. **Top Neighborhoods :** 
+           - Mont Boron (Quiet Luxury & Views)
+           - Carré d'Or (Walkable & Vibrant)
+        4. **Buying Process in France :** Les étapes clés pour un acheteur américain (Notaire, transferts de fonds, visas).
+        5. **Appel à l'action (Call-to-action) :** "Contact your dedicated Riviera real estate expert to start your property search today."
+        """)
+        if st.button("Générer l'ébauche du texte (Version US)"):
+            st.success("Le plan détaillé a été copié ! Vous pouvez l'exporter vers Word ou Canva pour créer votre guide.")
 
 elif page == "📊 Analyse DVF - Nice":
     st.title("📊 Analyse DVF - Ville de Nice")
-    st.markdown("""
-    Visualisez instantanément les transactions de référence sur Nice sans manipulation de fichiers.
-    """)
+    st.markdown("Visualisez instantanément les transactions de référence sur Nice sans manipulation de fichiers.")
     
-    # Création d'un échantillon structuré et réaliste pour Nice (Carré d'Or, Promenade, Mont Boron) immédiatement disponible
     @st.cache_data
     def charger_echantillon_nice():
         data = {
@@ -68,7 +98,6 @@ elif page == "📊 Analyse DVF - Nice":
     if df is not None and not df.empty:
         st.success(f"Base de données de Nice active ({len(df)} transactions clés chargées avec succès)")
         
-        # Filtre interactif par quartier
         quartiers = ["Tous"] + list(df['quartier_cible'].unique())
         choix_q = st.selectbox("Filtrer par secteur clé", quartiers)
         
@@ -78,8 +107,5 @@ elif page == "📊 Analyse DVF - Nice":
             df_affiche = df
 
         st.dataframe(df_affiche, use_container_width=True)
-        
         st.markdown("### 💡 Indicateur de marché")
         st.metric("Prix moyen constaté sur la sélection", f"{int(df_affiche['valeur_fonciere'].mean()):,} €".replace(',', ' '))
-    else:
-        st.info("Aucune donnée disponible.")
