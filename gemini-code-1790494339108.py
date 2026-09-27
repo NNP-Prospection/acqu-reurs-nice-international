@@ -73,7 +73,7 @@ elif page == "📊 Analyse DVF - Marché de Nice":
             recherche_rue = st.text_input("Entrez un nom de rue (ex: ANGLAIS, MASSENA, MONT BORON) :", value="ANGLAIS")
             
             if recherche_rue:
-                # Moteur de recherche intelligent (ignore les mots génériques)
+                # --- NOUVELLE RECHERCHE STABLE ---
                 mots_cles = recherche_rue.upper().split()
                 mots_a_ignorer = ['RUE', 'AVENUE', 'AV', 'BOULEVARD', 'BD', 'BVD', 'PROMENADE', 'PROM', 'DE', 'DES', 'LA', 'LE', 'LES', 'DU', 'D']
                 mots_utiles = [mot for mot in mots_cles if mot not in mots_a_ignorer]
@@ -81,11 +81,12 @@ elif page == "📊 Analyse DVF - Marché de Nice":
                 if not mots_utiles:
                     mots_utiles = mots_cles
                     
-                df_texte_global = df_brut.astype(str).agg(' '.join, axis=1).str.upper()
                 masque_global = pd.Series(True, index=df_brut.index)
                 
+                # On cherche chaque mot indépendamment (plus de crash)
                 for mot in mots_utiles:
-                    masque_global &= df_texte_global.str.contains(mot, na=False)
+                    masque_mot = df_brut.astype(str).apply(lambda col: col.str.contains(mot, case=False, na=False)).any(axis=1)
+                    masque_global &= masque_mot
                     
                 df_resultats = df_brut[masque_global].copy()
                 
@@ -117,7 +118,7 @@ elif page == "📊 Analyse DVF - Marché de Nice":
                         # CALCUL DU PRIX AU MÈTRE CARRÉ
                         df_uniques['prix_m2'] = df_uniques['prix_net'] / df_uniques['surface_nette']
                         
-                        # CLASSEMENT DU MONT BORON (si le terme est cherché)
+                        # CLASSEMENT DU MONT BORON
                         if "BORON" in recherche_rue.upper():
                             def classifier_mont_boron(adresse):
                                 adresse_str = str(adresse).upper()
@@ -145,7 +146,6 @@ elif page == "📊 Analyse DVF - Marché de Nice":
                             st.warning("Aucune surface n'est renseignée pour ces ventes (impossible de calculer le prix au m²).")
                     
                     st.markdown("#### 📋 Détail des ventes retenues :")
-                    # Affichage plus lisible des données pertinentes
                     colonnes_a_afficher = [c for c in ['date_mutation', col_voie, 'prix_net', 'surface_nette', 'prix_m2', 'type_local'] if c in df_uniques.columns]
                     if colonnes_a_afficher:
                         st.dataframe(df_uniques[colonnes_a_afficher].head(100).style.format({'prix_net': "{:,.0f} €", 'surface_nette': "{:,.0f} m²", 'prix_m2': "{:,.0f} €/m²"}), use_container_width=True)
