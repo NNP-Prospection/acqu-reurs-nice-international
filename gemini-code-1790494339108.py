@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import glob
-import os
 
 # Configuration de la page
 st.set_page_config(page_title="Espace Acquéreurs & DVF - Nice", layout="wide")
@@ -73,22 +72,18 @@ elif page == "📊 Analyse DVF - Marché de Nice":
     st.title("📊 Analyse DVF - Marché Immobilier de Nice")
     st.markdown("Exploitation automatique de vos fichiers DVF intégrés au projet.")
     
-    # Chargement automatique et persistant des fichiers CSV présents sur le dépôt
     @st.cache_data(show_spinner="Chargement automatique des fichiers DVF depuis le dépôt...")
     def charger_fichiers_depot():
-        # Recherche de tous les fichiers .csv à la racine ou dans les dossiers
         fichiers_csv = glob.glob("*.csv") + glob.glob("**/*.csv", recursive=True)
         if not fichiers_csv:
             return None
-        
         liste_df = []
         for f in fichiers_csv:
             try:
                 df_temp = pd.read_csv(f, low_memory=False, on_bad_lines='skip')
                 liste_df.append(df_temp)
-            except Exception as e:
+            except:
                 pass
-                
         if liste_df:
             return pd.concat(liste_df, ignore_index=True).drop_duplicates()
         return None
@@ -96,7 +91,7 @@ elif page == "📊 Analyse DVF - Marché de Nice":
     df_brut = charger_fichiers_depot()
 
     if df_brut is not None and not df_brut.empty:
-        st.success(f"✅ Base de données chargée automatiquement ({len(df_brut):,} transactions au total). Même après un F5, tout reste en place !")
+        st.success(f"✅ Base de données chargée automatiquement ({len(df_brut):,} transactions au total).")
 
         # --- DEUX ONGLETS DISTINCTS ---
         tab1, tab2 = st.tabs([
@@ -106,32 +101,48 @@ elif page == "📊 Analyse DVF - Marché de Nice":
         
         with tab1:
             st.subheader("Recherche par rue, mot-clé ou adresse")
-            st.markdown("Retrouvez le prix réel des ventes notariales en filtrant par nom de rue (ex: *Anglais*, *France*, *Massena*).")
+            st.markdown("Retrouvez le prix réel des ventes notariales en filtrant par nom de rue (ex: *Mont Boron*, *France*, *Anglais*).")
             
-            recherche_rue = st.text_input("Entrez un terme de recherche :")
+            recherche_rue = st.text_input("Entrez un terme de recherche :", value="MONT BORON")
             
             if recherche_rue:
                 masque_global = df_brut.astype(str).apply(lambda col: col.str.contains(recherche_rue, case=False, na=False)).any(axis=1)
                 df_resultats = df_brut[masque_global]
                 
                 st.metric("Transactions correspondantes trouvées", f"{len(df_resultats):,}")
+                
                 if not df_resultats.empty:
-                    colonnes_affichage = [c for c in ['date_mutation', 'valeur_fonciere', 'adresse_nom_voie', 'type_local', 'surface_reelle_bati'] if c in df_resultats.columns]
-                    st.dataframe(df_resultats[colonnes_affichage].head(100), use_container_width=True)
+                    # Affichage des colonnes réellement utiles si elles existent dans le fichier DVF officiel
+                    colonnes_possibles = [c for c in df_resultats.columns if any(k in c.lower() for k in ['date', 'valeur', 'voie', 'surface', 'type', 'commune', 'prix'])]
+                    
+                    if len(colonnes_possibles) > 0:
+                        st.dataframe(df_resultats[colonnes_possibles].head(100), use_container_width=True)
+                    else:
+                        # Si les noms de colonnes sont différents, on affiche tout le tableau filtré
+                        st.dataframe(df_resultats.head(100), use_container_width=True)
                 else:
                     st.warning("Aucun résultat ne correspond à votre recherche dans ces fichiers.")
             else:
-                st.info("💡 Saisissez un mot-clé ci-dessus (nom de rue, etc.) pour filtrer la base notariale.")
-                st.markdown("#### 🔍 Aperçu des transactions :")
-                colonnes_affichage = [c for c in ['date_mutation', 'valeur_fonciere', 'adresse_nom_voie', 'type_local', 'surface_reelle_bati'] if c in df_brut.columns]
-                st.dataframe(df_brut[colonnes_affichage].head(20), use_container_width=True)
+                st.info("💡 Saisissez un mot-clé ci-dessus.")
                     
         with tab2:
-            st.subheader("Analyse comparative des secteurs clés")
-            st.markdown("Vue d'ensemble sur le dynamisme de vos zones de prédilection (**Carré d'Or, Promenade des Anglais, Mont Boron**).")
+            st.subheader("Analyse comparative des secteurs clés & Tendances")
+            st.markdown("Indicateurs de prix et positionnement stratégique pour vos secteurs cibles.")
             
-            st.info("💡 **Synthèse stratégique :** Indicateurs clés pour positionner vos biens face à la demande à fort pouvoir d'achat.")
-            
+            # Calcul rapide d'indicateurs si la colonne de valeur foncière existe
+            col_valeur = [c for c in df_brut.columns if 'valeur' in c.lower()]
+            if col_valeur:
+                # Nettoyage rapide pour afficher quelques statistiques globales si possible
+                st.markdown("#### 📊 Indicateurs globaux du marché extrait :")
+                try:
+                    vals = pd.to_numeric(df_brut[col_valeur[0]], errors='coerce').dropna()
+                    col1, col2, col3 = st.columns(3)
+                    col1.metric("Prix moyen constaté", f"{vals.mean():,.0f} €".replace(",", " "))
+                    col2.metric("Prix médian", f"{vals.median():,.0f} €".replace(",", " "))
+                    col3.metric("Valeur maximale", f"{vals.max():,.0f} €".replace(",", " "))
+                except:
+                    pass
+
             df_synthese_marche = pd.DataFrame({
                 "Secteur Clé": ["Carré d'Or", "Promenade des Anglais", "Mont Boron"],
                 "Type de biens recherchés": ["Appartement urbain, piétonnier", "Vue mer frontale, standing", "Villas, résidences de prestige, calme"],
@@ -141,4 +152,3 @@ elif page == "📊 Analyse DVF - Marché de Nice":
             st.dataframe(df_synthese_marche, use_container_width=True)
     else:
         st.warning("⚠️ Aucun fichier CSV n'a été détecté dans votre dépôt GitHub.")
-        st.info("💡 Assurez-vous d'avoir bien validé le dépôt de vos fichiers CSV sur votre page GitHub. Une fois fait, l'application les affichera automatiquement ici sans manipulation.")
