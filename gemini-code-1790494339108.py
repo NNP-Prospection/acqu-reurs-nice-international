@@ -90,10 +90,13 @@ elif page == "📊 Analyse DVF - Marché de Nice":
                 
                 if not df_resultats.empty:
                     col_valeur = next((c for c in df_resultats.columns if 'valeur_fonciere' in c.lower() or 'prix' in c.lower()), None)
-                    col_voie = next((c for c in df_resultats.columns if 'voie' in c.lower() or 'adresse' in c.lower() and 'numero' not in c.lower()), None)
                     col_mutation = next((c for c in df_resultats.columns if 'id_mutation' in c.lower()), None)
                     col_surface = next((c for c in df_resultats.columns if 'surface_reelle_bati' in c.lower() or 'surface' in c.lower()), None)
                     
+                    # --- DÉTECTION STRICTE DES COLONNES D'ADRESSE ---
+                    col_num = 'adresse_numero' if 'adresse_numero' in df_resultats.columns else next((c for c in df_resultats.columns if 'numero' in c.lower() and 'compte' not in c.lower() and 'lot' not in c.lower()), None)
+                    col_voie = 'adresse_nom_voie' if 'adresse_nom_voie' in df_resultats.columns else next((c for c in df_resultats.columns if ('nom_voie' in c.lower() or 'voie' in c.lower()) and 'numero' not in c.lower() and 'code' not in c.lower() and 'nature' not in c.lower()), None)
+
                     if col_valeur and col_mutation and col_surface:
                         df_resultats['prix_net'] = pd.to_numeric(
                             df_resultats[col_valeur].astype(str).str.replace(',', '.').str.replace(' ', '').str.extract(r'([\d\.]+)', expand=False), 
@@ -110,19 +113,19 @@ elif page == "📊 Analyse DVF - Marché de Nice":
                         
                         # --- RECONSTRUCTION DE L'ADRESSE COMPLÈTE ---
                         df_uniques['Adresse_Complete'] = ""
-                        # Recherche de la colonne contenant le numéro de rue
-                        col_num = next((c for c in df_uniques.columns if c in ['adresse_numero', 'numero_voie']), None)
                         
                         if col_num:
-                            # Ajoute le numéro en évitant les ".0" décimaux
-                            numeros = df_uniques[col_num].fillna('').astype(str).str.replace(r'\.0$', '', regex=True)
-                            df_uniques['Adresse_Complete'] += numeros + " "
+                            # Ajoute le numéro sans le ".0"
+                            numeros = df_uniques[col_num].astype(str).str.replace(r'\.0$', '', regex=True).str.replace('nan', '')
+                            df_uniques['Adresse_Complete'] += numeros.apply(lambda x: x + " " if x else "")
                             
                         if col_voie:
                             # Ajoute le nom de la rue
-                            df_uniques['Adresse_Complete'] += df_uniques[col_voie].fillna('').astype(str)
+                            noms_rue = df_uniques[col_voie].astype(str).str.replace('nan', '')
+                            df_uniques['Adresse_Complete'] += noms_rue
                             
                         df_uniques['Adresse_Complete'] = df_uniques['Adresse_Complete'].str.strip()
+                        df_uniques['Adresse_Complete'] = df_uniques['Adresse_Complete'].replace("", "Adresse inconnue")
 
                         # --- CLASSEMENT DU MONT BORON ---
                         if "BORON" in recherche_rue.upper():
@@ -134,7 +137,7 @@ elif page == "📊 Analyse DVF - Marché de Nice":
                                     return "🏡 Mont Boron - Abords / Périphérie"
                             
                             if col_voie:
-                                df_uniques['Sous_Secteur'] = df_uniques[col_voie].apply(classifier_mont_boron)
+                                df_uniques['Sous_Secteur'] = df_uniques['Adresse_Complete'].apply(classifier_mont_boron)
                                 st.markdown("### 🏆 Analyse comparative au m²")
                                 for sous_sec, groupe in df_uniques.groupby('Sous_Secteur'):
                                     prix_moyen_m2 = groupe['prix_m2'].mean()
@@ -151,12 +154,10 @@ elif page == "📊 Analyse DVF - Marché de Nice":
                         # --- AFFICHAGE DU TABLEAU PROPRE ---
                         st.markdown("#### 📋 Détail des ventes retenues :")
                         
-                        # Sélection des colonnes utiles
                         colonnes_brutes = ['date_mutation', 'Adresse_Complete', 'prix_net', 'surface_nette', 'prix_m2', 'type_local']
                         colonnes_a_afficher = [c for c in colonnes_brutes if c in df_uniques.columns]
                         df_affichage = df_uniques[colonnes_a_afficher].copy()
                         
-                        # Renommage esthétique pour les professionnels
                         renommage = {
                             'date_mutation': 'Date',
                             'Adresse_Complete': 'Adresse',
@@ -167,7 +168,6 @@ elif page == "📊 Analyse DVF - Marché de Nice":
                         }
                         df_affichage = df_affichage.rename(columns=renommage)
                         
-                        # Application du formatage visuel (espaces, euros, m²)
                         format_dict = {}
                         if 'Prix Net' in df_affichage.columns: format_dict['Prix Net'] = "{:,.0f} €"
                         if 'Surface' in df_affichage.columns: format_dict['Surface'] = "{:,.0f} m²"
