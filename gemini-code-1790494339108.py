@@ -71,14 +71,14 @@ elif page == "📊 Analyse DVF - Vraies Ventes (Ciblé)":
     st.title("📊 Analyse DVF - Vraies Ventes de l'État (Nice Premium)")
     st.markdown("Ce module filtre **uniquement** vos secteurs de prédilection en analysant le nom des rues sur les données officielles.")
     
+    # Initialisation de la mémoire pour accumuler les fichiers un par un
     if 'liste_dfs_memoire' not in st.session_state:
         st.session_state.liste_dfs_memoire = []
 
     st.sidebar.markdown("---")
     st.sidebar.warning("📁 **Importation progressive (Fichier par fichier)**")
     
-    # MODIFICATION : On supprime la restriction stricte des types pour ne plus avoir de fichiers grisés
-    fichier_ajoute = st.sidebar.file_uploader("Ajouter un fichier de données", type=None, key="import_unitaire")
+    fichier_ajoute = st.sidebar.file_uploader("Ajouter un fichier CSV", type=None, key="import_unitaire")
 
     colonnes_utiles = ['date_mutation', 'valeur_fonciere', 'nom_commune', 'adresse_nom_voie', 'type_local', 'surface_reelle_bati']
 
@@ -109,12 +109,12 @@ elif page == "📊 Analyse DVF - Vraies Ventes (Ciblé)":
         try:
             df_temp = pd.read_csv(fichier_ajoute, low_memory=False)
             st.session_state.liste_dfs_memoire.append(df_temp)
-            st.sidebar.success("Fichier ajouté à la pile avec succès !")
+            st.sidebar.success(f"Fichier ajouté ! ({len(st.session_state.liste_dfs_memoire)} en mémoire)")
         except Exception as e:
-            st.sidebar.error(f"Erreur de lecture : assurez-vous qu'il s'agit d'un fichier texte/CSV valide ({e})")
+            st.sidebar.error(f"Erreur de lecture : {e}")
 
     if st.session_state.liste_dfs_memoire:
-        if st.sidebar.button("🗑️ Vider tous les fichiers importés"):
+        if st.sidebar.button("🗑️ Vider la mémoire de tous les fichiers"):
             st.session_state.liste_dfs_memoire = []
             st.rerun()
 
@@ -122,7 +122,7 @@ elif page == "📊 Analyse DVF - Vraies Ventes (Ciblé)":
     if st.session_state.liste_dfs_memoire:
         df_raw = pd.concat(st.session_state.liste_dfs_memoire, ignore_index=True)
         df_reelles = filtrer_nice_premium(df_raw)
-        st.info(f"💾 Nombre total de fichiers cumulés : **{len(st.session_state.liste_dfs_memoire)}**")
+        st.info(f"💾 **{len(st.session_state.liste_dfs_memoire)} fichier(s)** cumulé(s) dans l'application.")
 
     if df_reelles is not None and not df_reelles.empty:
         st.success(f"Opération réussie ! {len(df_reelles)} transactions trouvées dans vos secteurs cibles.")
@@ -141,4 +141,4 @@ elif page == "📊 Analyse DVF - Vraies Ventes (Ciblé)":
             prix_moyen = int(df_affiche['valeur_fonciere'].mean())
             st.metric(f"Prix moyen constaté dans la sélection", f"{prix_moyen:,} €".replace(',', ' '))
     else:
-        st.warning("⚠️ Aucun fichier n'a encore été importé. Utilisez le bouton dans la barre latérale pour importer vos fichiers.")
+        st.warning("⚠️ Aucun fichier n'a encore été accumulé. Importez vos fichiers un par un via le panneau latéral : ils s'ajouteront automatiquement à la liste !")
