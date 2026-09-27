@@ -1,64 +1,53 @@
 import pandas as pd
 import streamlit as st
 
-st.set_page_title("Analyse des Ventes DVF - Nice", layout="wide")
+st.set_page_config(page_title="Analyse DVF - Nice", layout="wide")
 
-st.title("🏡 Analyse des Données DVF & Dynamique de Marché à Nice")
+st.title("🏡 Analyse des Ventes Immobilières (DVF) - Nice")
 st.markdown("""
-Cet outil analyse les transactions immobilières pour identifier les zones et les types de biens 
-les plus dynamiques (cibles prioritaires pour le réinvestissement et l'accompagnement post-vente).
+Cet outil analyse les données officielles des transactions notariales pour vous aider à identifier 
+les zones les plus dynamiques et cibler les opportunités de réinvestissement.
 """)
 
 @st.cache_data
-def load_dvf_data():
-    # URL vers un échantillon ou l'API des données DVF (ici une structure type pour démonstration)
-    # Vous pouvez remplacer par le chargement de votre fichier CSV DVF local ou de l'API officielle.
-    url = "https://files.data.gouv.fr/geo-dvf/latest/csv/2023/communes/06/06088.csv" # Exemple pour Nice (Code INSEE 06088)
+def load_data():
+    # Lien direct vers le fichier CSV officiel des données DVF géolocalisées pour le département 06 (Alpes-Maritimes)
+    url = "https://files.data.gouv.fr/geo-dvf/latest/csv/2024/departements/06.csv"
     try:
         df = pd.read_csv(url, low_memory=False)
         return df
     except Exception as e:
-        st.error(f"Erreur lors du chargement des données DVF : {e}")
+        st.error(f"Impossible de charger le fichier DVF distant : {e}")
         return pd.DataFrame()
 
-with st.spinner("Chargement des données DVF en cours..."):
-    df_dvf = load_dvf_data()
+with st.spinner("Chargement des données DVF des Alpes-Maritimes... Veuillez patienter quelques secondes."):
+    df = load_data()
 
-if not df_dvf.empty:
-    st.success("Données chargées avec succès !")
+if not df.empty:
+    st.success(f"Données chargées avec succès ! ({len(df):,} transactions trouvées au total sur le département)")
     
-    # Nettoyage / Filtrage basique selon les colonnes courantes DVF
-    # Colonnes typiques : 'valeur_fonciere', 'lib_voie', 'code_postal', 'type_local', 'surface_relle_bati'
-    
-    st.sidebar.header("Filtres d'analyse")
-    
-    # Filtrer par type de bien si la colonne existe
-    if 'type_local' in df_dvf.columns:
-        types_biens = df_dvf['type_local'].dropna().unique()
-        selected_type = st.sidebar.selectbox("Type de bien", options=["Tous"] + list(types_biens))
-        if selected_type != "Tous":
-            df_dvf = df_dvf[df_dvf['type_local'] == selected_type]
+    # Filtrer spécifiquement pour la commune de Nice si la colonne 'nom_commune' existe
+    if 'nom_commune' in df.columns:
+        df_nice = df[df['nom_commune'].str.upper() == 'NICE'].copy()
+    else:
+        df_nice = df.copy()
 
-    # Affichage des principales métriques
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("Total des transactions analysées", len(df_dvf))
-    with col2:
-        if 'valeur_fonciere' in df_dvf.columns:
-            # Conversion en numérique propre
-            prix_moyen = pd.to_numeric(df_dvf['valeur_fonciere'], errors='coerce').mean()
-            st.metric("Valeur foncière moyenne", f"{prix_moyen:,.0f} €" if pd.notnull(prix_moyen) else "N/A")
-    with col3:
-        if 'code_postal' in df_dvf.columns:
-            st.metric("Codes postaux couverts", df_dvf['code_postal'].nunique())
+    st.metric("Transactions filtrées pour Nice", len(df_nice))
 
-    st.subheader("Aperçu des dernières transactions enregistrées")
-    st.dataframe(df_dvf.head(10))
+    # Affichage d'un aperçu
+    st.subheader("Aperçu des dernières transactions")
+    st.dataframe(df_nice[['date_mutation', 'valeur_fonciere', 'voie', 'code_postal', 'type_local', 'surface_relle_bati']].head(15))
 
-    # Analyse par rue / secteur si disponible
-    if 'lib_voie' in df_dvf.columns and 'valeur_fonciere' in df_dvf.columns:
-        st.subheader("📍 Top des rues les plus dynamiques en volume de ventes")
-        top_rues = df_dvf['lib_voie'].value_counts().head(10)
+    # Top des voies si les colonnes existent
+    if 'voie' in df_nice.columns and 'valeur_fonciere' in df_nice.columns:
+        st.subheader("📍 Rues enregistrant le plus de transactions")
+        top_rues = df_nice['voie'].dropna().value_counts().head(10)
         st.bar_chart(top_rues)
 else:
-    st.info("Veuillez vérifier la disponibilité de la source de données.")
+    st.warning("Le chargement automatique n'a pas abouti. Vous pouvez aussi téléverser un extrait CSV de vos données DVF directement ici.")
+    
+    uploaded_file = st.file_uploader("Importer un fichier CSV DVF local", type=["csv"])
+    if uploaded_file is not None:
+        df_local = pd.read_csv(uploaded_file, low_memory=False)
+        st.success("Fichier local chargé avec succès !")
+        st.dataframe(df_local.head(10))
