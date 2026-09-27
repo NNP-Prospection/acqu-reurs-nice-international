@@ -10,7 +10,7 @@ page = st.sidebar.radio("Aller à la section", [
     "Analyse des Secteurs Phares (US)", 
     "Suivi des Profils Acquéreurs", 
     "📄 Générateur de Lead - Guide Retraite",
-    "📊 Analyse DVF - Nice (Automatique)"
+    "📊 Analyse DVF - Import Local (06)"
 ])
 
 if page == "Analyse des Secteurs Phares (US)":
@@ -67,21 +67,21 @@ elif page == "📄 Générateur de Lead - Guide Retraite":
         5. **Call-to-Action:** "Contact your dedicated Riviera real estate expert."
         """)
 
-elif page == "📊 Analyse DVF - Nice (Automatique)":
-    st.title("📊 Analyse DVF - Ville de Nice (Connexion Directe)")
-    st.markdown("Cette section interroge directement les serveurs officiels pour extraire et analyser les transactions de Nice en un clic, sans manipulation de fichiers lourds.")
+elif page == "📊 Analyse DVF - Import Local (06)":
+    st.title("📊 Analyse DVF - Importation de vos fichiers locaux")
+    st.markdown("Importez votre extrait CSV de données DVF pour analyser instantanément les transactions de Nice et de vos secteurs cibles.")
     
-    annee_selectionnee = st.selectbox("Sélectionnez l'année de référence", ["2025", "2024", "2023"], index=0)
-    
-    if st.button("Lancer l'analyse des données de Nice"):
-        url_officielle = f"https://files.data.gouv.fr/geo-dvf/latest/csv/{annee_selectionnee}/departements/06.csv"
-        
-        with st.spinner(f"Récupération et filtrage des données de Nice pour {annee_selectionnee} en cours..."):
-            try:
-                # Lecture directe et filtrage immédiat pour ne garder que Nice
+    # Bouton d'upload dans la zone principale (plus grand et plus accessible que la barre latérale)
+    uploaded_file = st.file_uploader("📁 Sélectionnez votre fichier CSV DVF", type=['csv'])
+
+    if uploaded_file is not None:
+        try:
+            with st.spinner("Traitement du fichier en cours..."):
+                # Lecture optimisée pour éviter les saturations mémoire
                 colonnes = ['date_mutation', 'valeur_fonciere', 'nom_commune', 'adresse_nom_voie', 'type_local', 'surface_reelle_bati']
-                df_brut = pd.read_csv(url_officielle, usecols=lambda c: c in colonnes, low_memory=False)
+                df_brut = pd.read_csv(uploaded_file, usecols=lambda c: c in colonnes, low_memory=False)
                 
+                # Filtrage automatique sur Nice
                 df_nice = df_brut[df_brut['nom_commune'].str.contains('Nice', case=False, na=False)].copy()
                 df_nice = df_nice.dropna(subset=['valeur_fonciere', 'adresse_nom_voie'])
                 
@@ -94,25 +94,27 @@ elif page == "📊 Analyse DVF - Nice (Automatique)":
                     elif any(mot in rue for mot in ['FRANCE', 'BUFFA', 'MASSENA', 'GRIMALDI', 'PARADIS', 'KARR', 'HALEVY', 'SUEDE', 'CONGRES', 'RIVOLI', 'MEDECIN', 'VICTOR HUGO']):
                         return "Carré d'Or"
                     else:
-                        return "Autre Quartier Nice"
+                        return "Hors Cible"
                 
                 df_nice['Secteur_Cible'] = df_nice['adresse_nom_voie'].apply(identifier_secteur)
-                df_nice['valeur_fonciere'] = df_nice['valeur_fonciere'].astype(int)
+                df_filtered = df_nice[df_nice['Secteur_Cible'] != "Hors Cible"].copy()
+                df_filtered['valeur_fonciere'] = df_filtered['valeur_fonciere'].astype(int)
                 
-                st.success(f"Données chargées avec succès ! {len(df_nice):,} transactions analysées pour Nice en {annee_selectionnee}.")
+            if not df_filtered.empty:
+                st.success(f"✅ Fichier analysé avec succès ! {len(df_filtered):,} transactions pertinentes trouvées dans vos secteurs cibles.")
                 
-                # Statistiques globales
                 col1, col2 = st.columns(2)
                 with col1:
-                    st.metric("Total des transactions à Nice", f"{len(df_nice):,}")
+                    st.metric("Transactions ciblées affichées", f"{len(df_filtered):,}")
                 with col2:
-                    prix_moyen_nice = int(df_nice['valeur_fonciere'].mean())
-                    st.metric("Valeur foncière moyenne globale", f"{prix_moyen_nice:,} €".replace(',', ' '))
+                    prix_moyen = int(df_filtered['valeur_fonciere'].mean())
+                    st.metric("Prix moyen sur les secteurs cibles", f"{prix_moyen:,} €".replace(',', ' '))
                 
-                st.markdown("### 📋 Détail des transactions par secteur")
-                st.dataframe(df_nice.sort_values(by='date_mutation', ascending=False).head(100), use_container_width=True)
+                st.dataframe(df_filtered.sort_values(by='date_mutation', ascending=False), use_container_width=True)
+            else:
+                st.warning("⚠️ Ce fichier ne contient pas de transactions correspondant aux rues de vos secteurs cibles (Carré d'Or, Promenade, Mont Boron). Essayez un autre fichier de votre dossier.")
                 
-            except Exception as e:
-                st.error("⚠️ Impossible de joindre directement le serveur distant. Veuillez réessayer dans quelques instants.")
+        except Exception as e:
+            st.error("⚠️ Erreur lors de la lecture du fichier. Assurez-vous qu'il s'agit bien d'un fichier CSV DVF valide.")
     else:
-        st.info("💡 Cliquez sur le bouton ci-dessus pour lancer l'extraction automatique des données de Nice.")
+        st.info("💡 Cliquez sur le bouton ci-dessus pour choisir et importer votre fichier CSV depuis votre tablette.")
