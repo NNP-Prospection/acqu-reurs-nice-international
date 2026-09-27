@@ -1,7 +1,5 @@
 import streamlit as st
 import pandas as pd
-import glob
-import os
 
 # Configuration de la page
 st.set_page_config(page_title="Espace Acquéreurs & DVF - Nice", layout="wide")
@@ -71,23 +69,38 @@ elif page == "📄 Générateur de Lead - Guide Retraite":
 
 elif page == "📊 Analyse DVF - Marché de Nice":
     st.title("📊 Analyse DVF - Marché Immobilier de Nice")
-    st.markdown("Chargement automatique des données officielles intégrées au projet.")
+    st.markdown("Exploitez vos extraits DVF pour vos avis de valeur et études de marché.")
     
-    @st.cache_data(show_spinner="Lecture automatique de vos fichiers DVF sur le serveur...")
-    def charger_fichiers_dossier():
-        # Recherche tous les fichiers CSV dans le dossier 'data'
-        chemins_fichiers = glob.glob("data/*.csv")
-        if not chemins_fichiers:
-            return None
-        liste_df = [pd.read_csv(f, low_memory=False, on_bad_lines='skip') for f in chemins_fichiers]
-        return pd.concat(liste_df, ignore_index=True)
+    # Initialisation de la mémoire persistante sécurisée
+    if 'df_global_memoire' not in st.session_state:
+        st.session_state.df_global_memoire = None
 
-    df_brut = charger_fichiers_dossier()
+    # Si la mémoire est vide, on affiche le sélecteur de fichiers accessible
+    if st.session_state.df_global_memoire is None:
+        uploaded_files = st.file_uploader("📁 Importer vos fichiers DVF (CSV)", accept_multiple_files=True)
 
-    if df_brut is not None and not df_brut.empty:
-        st.success(f"✅ Base de données chargée automatiquement ({len(df_brut):,} transactions prêtes).")
+        if uploaded_files:
+            try:
+                with st.spinner("Traitement et mémorisation des fichiers en cours..."):
+                    liste_df = [pd.read_csv(f, low_memory=False, on_bad_lines='skip') for f in uploaded_files]
+                    st.session_state.df_global_memoire = pd.concat(liste_df, ignore_index=True)
+                st.rerun()
+            except Exception as e:
+                st.error(f"Erreur lors de la lecture des fichiers : {e}")
+    
+    # Si les données sont chargées en mémoire, l'interface complète s'affiche
+    if st.session_state.df_global_memoire is not None:
+        df_brut = st.session_state.df_global_memoire
+        
+        col1, col2 = st.columns([4, 1])
+        with col1:
+            st.success(f"✅ Base de données active en mémoire ({len(df_brut):,} transactions prêtes).")
+        with col2:
+            if st.button("🔄 Réinitialiser"):
+                st.session_state.df_global_memoire = None
+                st.rerun()
 
-        # --- DIVISION EN DEUX SECTIONS DISTINCTES ---
+        # --- DEUX ONGLETS DISTINCTS ---
         tab1, tab2 = st.tabs([
             "💰 1. Connaissance des vrais prix de vente", 
             "📈 2. Tendances et Secteurs Clés"
@@ -128,7 +141,5 @@ elif page == "📊 Analyse DVF - Marché de Nice":
                 "Atout clé pour la vente": ["Proximité immédiate des commerces et plages", "Panorama exceptionnel et mythe azuréen", "Vues panoramiques et discrétion absolue"]
             })
             st.dataframe(df_synthese_marche, use_container_width=True)
-
     else:
-        st.warning("⚠️ Aucun dossier 'data' ou aucun fichier CSV n'a été détecté sur GitHub.")
-        st.markdown("Veuillez créer un dossier nommé **`data`** à la racine de votre dépôt GitHub et y déposer vos fichiers CSV. Une fois fait, l'application les chargera automatiquement pour toujours !")
+        st.info("💡 Veuillez sélectionner vos fichiers CSV via le bouton ci-dessus pour lancer l'analyse.")
