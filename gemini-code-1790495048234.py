@@ -1,53 +1,66 @@
-import pandas as pd
 import streamlit as st
+import pandas as pd
 
-st.set_page_config(page_title="Analyse DVF - Nice", layout="wide")
+st.set_page_config(page_title="DVF - Alpes-Maritimes (06)", layout="wide")
 
-st.title("🏡 Analyse des Ventes Immobilières (DVF) - Nice")
+st.title("📊 Analyse des Valeurs Foncières (DVF) - Alpes-Maritimes (06)")
 st.markdown("""
 Cet outil analyse les données officielles des transactions notariales pour vous aider à identifier 
 les zones les plus dynamiques et cibler les opportunités de réinvestissement.
 """)
 
-@st.cache_data
-def load_data():
-    # Lien direct vers le fichier CSV officiel des données DVF géolocalisées pour le département 06 (Alpes-Maritimes)
-    url = "https://files.data.gouv.fr/geo-dvf/latest/csv/2024/departements/06.csv"
+# URL officielle des données DVF pour le département 06 (Alpes-Maritimes)
+DEFAULT_DVF_URL = "https://files.data.gouv.fr/geo-dvf/latest/csv/2023/departements/06.csv"
+
+@st.cache_data(show_spinner="Téléchargement des données DVF du 06 en cours...")
+def charger_donnees_url(url):
     try:
         df = pd.read_csv(url, low_memory=False)
         return df
     except Exception as e:
-        st.error(f"Impossible de charger le fichier DVF distant : {e}")
-        return pd.DataFrame()
+        return None
 
-with st.spinner("Chargement des données DVF des Alpes-Maritimes... Veuillez patienter quelques secondes."):
-    df = load_data()
+# Tentative de chargement via l'URL officielle
+data_source = "url"
+df = charger_donnees_url(DEFAULT_DVF_URL)
 
-if not df.empty:
-    st.success(f"Données chargées avec succès ! ({len(df):,} transactions trouvées au total sur le département)")
+if df is None or df.empty:
+    st.warning("⚠️ Le téléchargement direct depuis la source officielle a échoué ou est bloqué par le volume des données.")
+    data_source = "upload"
+
+# Sécurité intégrée : Bouton de secours pour importer un fichier CSV localement
+st.sidebar.header("📁 Gestion des données")
+uploaded_file = st.sidebar.file_uploader("Importer un fichier CSV DVF (06) de secours", type=['csv'])
+
+if uploaded_file is not None:
+    @st.cache_data
+    def charger_donnees_upload(file):
+        return pd.read_csv(file, low_memory=False)
     
-    # Filtrer spécifiquement pour la commune de Nice si la colonne 'nom_commune' existe
+    df = charger_donnees_upload(uploaded_file)
+    data_source = "upload"
+    st.sidebar.success("Fichier CSV chargé avec succès depuis votre ordinateur !")
+
+# Traitement et affichage si les données sont disponibles
+if df is not None and not df.empty:
+    st.success(f"Données chargées avec succès ! ({len(df):,} transactions trouvées) via : **{'URL Officielle' if data_source == 'url' else 'Importation locale'}**")
+    
+    # Filtre optionnel par commune (ex: Nice ou autres communes du 06)
     if 'nom_commune' in df.columns:
-        df_nice = df[df['nom_commune'].str.upper() == 'NICE'].copy()
+        communes = sorted(df['nom_commune'].dropna().unique())
+        selected_commune = st.selectbox("Filtrer par commune", ["Toutes"] + list(communes))
+        
+        if selected_commune != "Toutes":
+            df_filtered = df[df['nom_commune'] == selected_commune]
+        else:
+            df_filtered = df
+            
+        st.metric("Nombre de mutations affichées", f"{len(df_filtered):,}")
+        
+        # Aperçu des principaux champs
+        colonnes_a_afficher = [c for c in ['date_mutation', 'valeur_fonciere', 'nom_commune', 'type_local', 'surface_reelle_bati'] if c in df.columns]
+        st.dataframe(df_filtered[colonnes_a_afficher].head(100), use_container_width=True)
     else:
-        df_nice = df.copy()
-
-    st.metric("Transactions filtrées pour Nice", len(df_nice))
-
-    # Affichage d'un aperçu
-    st.subheader("Aperçu des dernières transactions")
-    st.dataframe(df_nice[['date_mutation', 'valeur_fonciere', 'voie', 'code_postal', 'type_local', 'surface_relle_bati']].head(15))
-
-    # Top des voies si les colonnes existent
-    if 'voie' in df_nice.columns and 'valeur_fonciere' in df_nice.columns:
-        st.subheader("📍 Rues enregistrant le plus de transactions")
-        top_rues = df_nice['voie'].dropna().value_counts().head(10)
-        st.bar_chart(top_rues)
+        st.dataframe(df.head(100), use_container_width=True)
 else:
-    st.warning("Le chargement automatique n'a pas abouti. Vous pouvez aussi téléverser un extrait CSV de vos données DVF directement ici.")
-    
-    uploaded_file = st.file_uploader("Importer un fichier CSV DVF local", type=["csv"])
-    if uploaded_file is not None:
-        df_local = pd.read_csv(uploaded_file, low_memory=False)
-        st.success("Fichier local chargé avec succès !")
-        st.dataframe(df_local.head(10))
+    st.info("💡 Veuillez importer un fichier CSV des Alpes-Maritimes via le panneau latéral si le lien officiel ne répond pas.")
