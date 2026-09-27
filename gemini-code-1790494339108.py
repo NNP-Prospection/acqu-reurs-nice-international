@@ -41,31 +41,35 @@ elif page == "📊 Analyse DVF - Marché de Nice":
     st.title("📊 Analyse DVF - Marché Immobilier de Nice & Sous-Secteurs")
     st.markdown("Exploitation de votre base de données locale GitHub.")
     
-    @st.cache_data(show_spinner="Lecture automatique du fichier texte sur GitHub...")
-    def charger_fichier_texte_github():
-        # L'application cherche automatiquement un fichier texte (.txt ou .csv) dans votre GitHub
-        fichiers_texte = glob.glob("*.txt") + glob.glob("*.csv")
+    @st.cache_data(show_spinner="Lecture automatique de vos fichiers sur GitHub...")
+    def charger_fichiers_github():
+        # L'application cherche TOUS les fichiers textes ou CSV dans votre GitHub
+        fichiers = glob.glob("*.txt") + glob.glob("*.csv") + glob.glob("**/*.csv", recursive=True)
         
-        if not fichiers_texte:
-            return None
+        if not fichiers:
+            return None, 0
             
-        # Prend le premier fichier trouvé
-        fichier_a_lire = fichiers_texte[0]
+        liste_df = []
+        for f in fichiers:
+            try:
+                # CORRECTION ICI : suppression de low_memory=False pour éviter le plantage
+                df = pd.read_csv(f, sep=None, engine='python', on_bad_lines='skip')
+                liste_df.append(df)
+            except Exception as e:
+                pass
+                
+        if liste_df:
+            # Fusionne tous vos fichiers en une seule grande base de données
+            df_global = pd.concat(liste_df, ignore_index=True)
+            df_global.columns = [str(c).strip() for c in df_global.columns]
+            return df_global, len(fichiers)
         
-        try:
-            # Demande à Python de lire le fichier texte et de s'adapter au format automatiquement
-            df = pd.read_csv(fichier_a_lire, low_memory=False, sep=None, engine='python', on_bad_lines='skip')
-            df.columns = [str(c).strip() for c in df.columns]
-            return df, fichier_a_lire
-        except Exception as e:
-            st.error(f"Erreur de lecture : {e}")
-            return None, None
+        return None, 0
 
-    resultat = charger_fichier_texte_github()
+    df_brut, nb_fichiers = charger_fichiers_github()
     
-    if resultat is not None and resultat[0] is not None:
-        df_brut, nom_fichier = resultat
-        st.success(f"✅ Fichier '{nom_fichier}' détecté et chargé automatiquement ! ({len(df_brut):,} lignes lues).")
+    if df_brut is not None and not df_brut.empty:
+        st.success(f"✅ {nb_fichiers} fichier(s) détecté(s) et chargé(s) automatiquement ! ({len(df_brut):,} lignes lues).")
 
         tab1, tab2 = st.tabs(["💰 Recherche & Analyse par Sous-Secteurs", "📈 Synthèse"])
         
@@ -123,4 +127,4 @@ elif page == "📊 Analyse DVF - Marché de Nice":
             st.markdown("### Synthèse des Secteurs")
             st.info("Données prêtes pour l'analyse patrimoniale.")
     else:
-        st.error("⚠️ Aucun fichier texte (.txt ou .csv) n'a été trouvé dans votre GitHub. Vérifiez qu'il est bien présent au même endroit que ce code.")
+        st.error("⚠️ Aucun fichier texte (.txt ou .csv) n'a pu être lu dans votre GitHub.")
