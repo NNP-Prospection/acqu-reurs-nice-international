@@ -45,54 +45,52 @@ elif page == "Générateur de Lead - Guide Retraite":
     st.info("Module en cours de chargement...")
 
 elif page == "📊 Analyse DVF - Nice":
-    st.title("📊 Analyse DVF officielle - Ville de Nice")
+    st.title("📊 Analyse DVF - Ville de Nice")
     st.markdown("""
-    Cette section télécharge la base consolidée officielle des transactions de l'État pour les Alpes-Maritimes 
-    et isole automatiquement les données de **Nice**.
+    Visualisez les transactions immobilières. Si le serveur officiel est encombré, 
+    utilisez le bouton d'importation dans le panneau latéral de gauche pour charger votre fichier CSV local.
     """)
     
-    # URL directe stable vers le fichier consolidé officiel du département 06
-    URL_DVF_06 = "https://files.data.gouv.fr/geo-dvf/latest/csv/2025/departements/06.csv"
-    
-    @st.cache_data(show_spinner="Chargement des données foncières de Nice en cours...")
-    def charger_donnees_nice(url):
+    df = None
+    source_utilisee = ""
+
+    # Option de secours prioritaire : Importation directe d'un fichier CSV local
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("📁 Importation de secours")
+    uploaded_file = st.sidebar.file_uploader("Glissez-déposez votre fichier CSV DVF (06 ou Nice)", type=['csv'])
+
+    if uploaded_file is not None:
+        try:
+            df = pd.read_csv(uploaded_file, low_memory=False)
+            # Filtrer sur Nice si le fichier contient toute la région
+            if 'nom_commune' in df.columns:
+                df = df[df['nom_commune'].str.contains('Nice', case=False, na=False)]
+            source_utilisee = "Importation locale (CSV)"
+        except Exception as e:
+            st.error(f"Erreur lors de la lecture du fichier : {e}")
+
+    # Tentative automatique en ligne si aucun fichier n'est uploadé
+    if df is None:
+        URL_DVF_06 = "https://files.data.gouv.fr/geo-dvf/latest/csv/2024/departements/06.csv"
         try:
             colonnes_utiles = ['date_mutation', 'valeur_fonciere', 'nom_commune', 'type_local', 'surface_reelle_bati']
-            df = pd.read_csv(url, usecols=lambda c: c in colonnes_utiles, low_memory=False)
-            
-            # Filtrage strict sur Nice
-            df_nice = df[df['nom_commune'].str.contains('Nice', case=False, na=False)].copy()
-            df_nice = df_nice.dropna(subset=['valeur_fonciere'])
-            
-            # Conversion de la date pour un tri propre
-            df_nice['date_mutation'] = pd.to_datetime(df_nice['date_mutation'])
-            return df_nice
-        except Exception as e:
-            # Fallback sur une année précédente stable si la version 2025 pose un souci de lien direct
-            try:
-                url_secours = "https://files.data.gouv.fr/geo-dvf/latest/csv/2024/departements/06.csv"
-                df = pd.read_csv(url_secours, usecols=lambda c: c in colonnes_utiles, low_memory=False)
-                df_nice = df[df['nom_commune'].str.contains('Nice', case=False, na=False)].copy()
-                df_nice = df_nice.dropna(subset=['valeur_fonciere'])
-                df_nice['date_mutation'] = pd.to_datetime(df_nice['date_mutation'])
-                return df_nice
-            except:
-                return None
+            df = pd.read_csv(URL_DVF_06, usecols=lambda c: c in colonnes_utiles, nrows=5000, low_memory=False) # nrows limite pour éviter le blocage réseau
+            df = df[df['nom_commune'].str.contains('Nice', case=False, na=False)].dropna(subset=['valeur_fonciere'])
+            source_utilisee = "Téléchargement en ligne (Échantillon)"
+        except:
+            df = None
 
-    df = charger_donnees_nice(URL_DVF_06)
-
+    # Affichage des résultats si les données sont prêtes
     if df is not None and not df.empty:
-        st.success(f"Données chargées avec succès ! ({len(df):,} transactions immobilières trouvées à Nice)")
+        st.success(f"Données chargées via : **{source_utilisee}** ({len(df):,} lignes affichées)")
         
-        # Filtre optionnel par type de bien si disponible
+        # Filtre par type de bien si présent
         if 'type_local' in df.columns:
-            types_biens = ["Tous"] + list(df['type_local'].dropna().unique())
-            choix_type = st.selectbox("Filtrer par type de bien", types_biens)
-            if choix_type != "Tous":
-                df = df[df['type_local'] == choix_type]
-                st.metric("Transactions filtrées", f"{len(df):,}")
+            types = ["Tous"] + list(df['type_local'].dropna().unique())
+            choix = st.selectbox("Filtrer par type de bien", types)
+            if choix != "Tous":
+                df = df[df['type_local'] == choix]
 
-        # Affichage du tableau trié par date décroissante
-        st.dataframe(df.sort_values(by='date_mutation', ascending=False).head(100), use_container_width=True)
+        st.dataframe(df.head(100), use_container_width=True)
     else:
-        st.warning("⚠️ Le serveur officiel met du temps à répondre. Réessayez dans quelques instants ou actualisez la page.")
+        st.info("💡 Le téléchargement en ligne est actuellement ralenti. Veuillez importer un fichier CSV via la barre latérale à gauche pour afficher vos données immédiatement.")
