@@ -71,32 +71,35 @@ elif page == "📊 Analyse DVF - Marché de Nice":
     st.title("📊 Analyse DVF - Marché Immobilier de Nice")
     st.markdown("Exploitez vos extraits DVF pour vos avis de valeur et études de marché.")
     
-    # Initialisation de la mémoire persistante sécurisée
+    # Initialisation de la mémoire persistante
     if 'df_global_memoire' not in st.session_state:
         st.session_state.df_global_memoire = None
 
-    # Si la mémoire est vide, on affiche le sélecteur de fichiers accessible
-    if st.session_state.df_global_memoire is None:
-        uploaded_files = st.file_uploader("📁 Importer vos fichiers DVF (CSV)", accept_multiple_files=True)
+    # --- LE BOUTON RESTE TOUJOURS ACCESSIBLE EN HAUT ---
+    uploaded_files = st.file_uploader("📁 Importer ou ajouter vos fichiers DVF (CSV - vous pouvez en sélectionner plusieurs)", accept_multiple_files=True)
 
-        if uploaded_files:
-            try:
-                with st.spinner("Traitement et mémorisation des fichiers en cours..."):
-                    liste_df = [pd.read_csv(f, low_memory=False, on_bad_lines='skip') for f in uploaded_files]
-                    st.session_state.df_global_memoire = pd.concat(liste_df, ignore_index=True)
-                st.rerun()
-            except Exception as e:
-                st.error(f"Erreur lors de la lecture des fichiers : {e}")
-    
-    # Si les données sont chargées en mémoire, l'interface complète s'affiche
+    if uploaded_files:
+        try:
+            with st.spinner("Mise à jour et cumul des fichiers en cours..."):
+                liste_df = [pd.read_csv(f, low_memory=False, on_bad_lines='skip') for f in uploaded_files]
+                # On cumule avec ce qui était déjà en mémoire s'il y en a, ou on remplace
+                nouveau_df = pd.concat(liste_df, ignore_index=True)
+                if st.session_state.df_global_memoire is not None:
+                    st.session_state.df_global_memoire = pd.concat([st.session_state.df_global_memoire, nouveau_df], ignore_index=True).drop_duplicates()
+                else:
+                    st.session_state.df_global_memoire = nouveau_df
+        except Exception as e:
+            st.error(f"Erreur lors de la lecture des fichiers : {e}")
+
+    # Si nous avons des données en mémoire, on affiche le tableau et les onglets
     if st.session_state.df_global_memoire is not None:
         df_brut = st.session_state.df_global_memoire
         
         col1, col2 = st.columns([4, 1])
         with col1:
-            st.success(f"✅ Base de données active en mémoire ({len(df_brut):,} transactions prêtes).")
+            st.success(f"✅ Base de données active en mémoire ({len(df_brut):,} transactions au total).")
         with col2:
-            if st.button("🔄 Réinitialiser"):
+            if st.button("🔄 Tout effacer"):
                 st.session_state.df_global_memoire = None
                 st.rerun()
 
