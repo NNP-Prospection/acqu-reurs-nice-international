@@ -39,31 +39,33 @@ elif page == "📄 Générateur de Lead - Guide Retraite":
 
 elif page == "📊 Analyse DVF - Marché de Nice":
     st.title("📊 Analyse DVF - Marché Immobilier de Nice & Sous-Secteurs")
-    st.markdown("Exploitation avancée avec distinction des micro-localisations (ex: Mont Boron Sélect vs Périphérique).")
+    st.markdown("Exploitation de votre base de données locale GitHub.")
     
-    @st.cache_data(show_spinner="Lecture automatique de vos 17 fichiers sur GitHub...")
-    def charger_fichiers_github():
-        # Va chercher tous vos fichiers CSV déposés sur GitHub
-        fichiers_csv = glob.glob("*.csv") + glob.glob("**/*.csv", recursive=True)
-        if not fichiers_csv:
+    @st.cache_data(show_spinner="Lecture automatique du fichier texte sur GitHub...")
+    def charger_fichier_texte_github():
+        # L'application cherche automatiquement un fichier texte (.txt ou .csv) dans votre GitHub
+        fichiers_texte = glob.glob("*.txt") + glob.glob("*.csv")
+        
+        if not fichiers_texte:
             return None
-        liste_df = []
-        for f in fichiers_csv:
-            try:
-                df_temp = pd.read_csv(f, low_memory=False, sep=None, engine='python', on_bad_lines='skip')
-                liste_df.append(df_temp)
-            except:
-                pass
-        if liste_df:
-            df_global = pd.concat(liste_df, ignore_index=True)
-            df_global.columns = [c.strip() for c in df_global.columns]
-            return df_global
-        return None
+            
+        # Prend le premier fichier trouvé
+        fichier_a_lire = fichiers_texte[0]
+        
+        try:
+            # Demande à Python de lire le fichier texte et de s'adapter au format automatiquement
+            df = pd.read_csv(fichier_a_lire, low_memory=False, sep=None, engine='python', on_bad_lines='skip')
+            df.columns = [str(c).strip() for c in df.columns]
+            return df, fichier_a_lire
+        except Exception as e:
+            st.error(f"Erreur de lecture : {e}")
+            return None, None
 
-    df_brut = charger_fichiers_github()
-
-    if df_brut is not None and not df_brut.empty:
-        st.success(f"✅ Base de données chargée depuis VOS fichiers GitHub ({len(df_brut):,} lignes lues).")
+    resultat = charger_fichier_texte_github()
+    
+    if resultat is not None and resultat[0] is not None:
+        df_brut, nom_fichier = resultat
+        st.success(f"✅ Fichier '{nom_fichier}' détecté et chargé automatiquement ! ({len(df_brut):,} lignes lues).")
 
         tab1, tab2 = st.tabs(["💰 Recherche & Analyse par Sous-Secteurs", "📈 Synthèse"])
         
@@ -80,9 +82,9 @@ elif page == "📊 Analyse DVF - Marché de Nice":
                     col_mutation = next((c for c in df_resultats.columns if 'id_mutation' in c.lower()), None)
                     
                     if col_valeur and col_mutation:
-                        # Nettoyage des prix (enlève les virgules et transforme en vrais chiffres)
+                        # Nettoyage ultra-robuste des prix
                         df_resultats['prix_net'] = pd.to_numeric(
-                            df_resultats[col_valeur].astype(str).str.replace(',', '.').str.extract(r'([\d\.]+)', expand=False), 
+                            df_resultats[col_valeur].astype(str).str.replace(',', '.').str.replace(' ', '').str.extract(r'([\d\.]+)', expand=False), 
                             errors='coerce'
                         )
                         
@@ -93,7 +95,7 @@ elif page == "📊 Analyse DVF - Marché de Nice":
                         if "MONT BORON" in recherche_rue.upper():
                             def classifier_mont_boron(adresse):
                                 adresse_str = str(adresse).upper()
-                                if any(terme in adresse_str for terme in ['FORESTIERE', 'ALBAN', 'MONT BORON', 'REPUBLIQUE', 'MAETERLINCK']):
+                                if any(terme in adresse_str for terme in ['FORESTIERE', 'ALBAN', 'MONT BORON', 'REPUBLIQUE', 'MAETERLINCK', 'JEAN LORRAIN']):
                                     return "⭐ Mont Boron - Adresses Sélectes (Boulevards / Corniches)"
                                 else:
                                     return "🏡 Mont Boron - Abords / Périphérie"
@@ -121,4 +123,4 @@ elif page == "📊 Analyse DVF - Marché de Nice":
             st.markdown("### Synthèse des Secteurs")
             st.info("Données prêtes pour l'analyse patrimoniale.")
     else:
-        st.error("⚠️ Impossible de lire les fichiers CSV sur GitHub.")
+        st.error("⚠️ Aucun fichier texte (.txt ou .csv) n'a été trouvé dans votre GitHub. Vérifiez qu'il est bien présent au même endroit que ce code.")
