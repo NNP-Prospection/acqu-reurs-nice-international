@@ -69,48 +69,66 @@ elif page == "📄 Générateur de Lead - Guide Retraite":
 
 elif page == "📊 Analyse DVF - Vraies Ventes (Ciblé)":
     st.title("📊 Analyse DVF - Vraies Ventes de l'État (Nice Premium)")
-    st.markdown("Ce module interroge la base de données réelle de l'État et filtre **uniquement** vos secteurs de prédilection en analysant le nom des rues.")
+    st.markdown("Ce module filtre **uniquement** vos secteurs de prédilection en analysant le nom des rues sur les données officielles.")
     
-    annee = st.selectbox("Sélectionnez l'année d'analyse (les données de l'État sont mises à jour par semestre)", ["2026", "2025", "2024"], index=1)
+    annee = st.selectbox("Sélectionnez l'année d'analyse :", ["2026", "2025", "2024", "2023"], index=1)
     
-    @st.cache_data(show_spinner=f"Connexion aux serveurs de l'État pour {annee}...")
+    # ---------------------------------------------------------
+    # SECURITÉ : BOUTON D'IMPORTATION MANUELLE DANS LA BARRE LATÉRALE
+    # ---------------------------------------------------------
+    st.sidebar.markdown("---")
+    st.sidebar.warning("📁 **Plan B (Si le serveur de l'État bloque)**")
+    uploaded_file = st.sidebar.file_uploader(f"Importez ici votre fichier 06.csv", type=['csv'])
+
+    colonnes_utiles = ['date_mutation', 'valeur_fonciere', 'nom_commune', 'adresse_nom_voie', 'type_local', 'surface_reelle_bati']
+
+    # Fonction pour filtrer et nettoyer les données (utilisée en auto et en manuel)
+    def filtrer_nice_premium(df_brut):
+        df_nice = df_brut[df_brut['nom_commune'].str.contains('Nice', case=False, na=False)].copy()
+        df_nice = df_nice.dropna(subset=['valeur_fonciere', 'adresse_nom_voie'])
+        
+        def identifier_secteur(rue):
+            rue = str(rue).upper()
+            if 'ANGLAIS' in rue:
+                return "Promenade des Anglais"
+            elif any(mot in rue for mot in ['BORON', 'ALBAN', 'BATTERIE', 'FORESTIER', 'MACCARANI']):
+                return "Mont Boron"
+            elif any(mot in rue for mot in ['FRANCE', 'BUFFA', 'MASSENA', 'GRIMALDI', 'PARADIS', 'KARR', 'HALEVY', 'SUEDE', 'CONGRES', 'RIVOLI', 'MEDECIN', 'VICTOR HUGO']):
+                return "Carré d'Or"
+            else:
+                return "Hors Cible"
+        
+        df_nice['Quartier_Cible'] = df_nice['adresse_nom_voie'].apply(identifier_secteur)
+        df_premium = df_nice[df_nice['Quartier_Cible'] != "Hors Cible"].copy()
+        df_premium['valeur_fonciere'] = df_premium['valeur_fonciere'].astype(int)
+        return df_premium
+
+    @st.cache_data(show_spinner=f"Connexion automatique aux serveurs de l'État pour {annee}...")
     def charger_vraies_donnees(annee_choisie):
         url = f"https://files.data.gouv.fr/geo-dvf/latest/csv/{annee_choisie}/departements/06.csv"
         try:
-            colonnes_utiles = ['date_mutation', 'valeur_fonciere', 'nom_commune', 'adresse_nom_voie', 'type_local', 'surface_reelle_bati']
-            df = pd.read_csv(url, usecols=lambda c: c in colonnes_utiles, low_memory=False)
-            
-            # On ne garde que Nice et les lignes avec des prix
-            df_nice = df[df['nom_commune'].str.contains('Nice', case=False, na=False)].copy()
-            df_nice = df_nice.dropna(subset=['valeur_fonciere', 'adresse_nom_voie'])
-            
-            # Fonction pour deviner le quartier selon la rue
-            def identifier_secteur(rue):
-                rue = str(rue).upper()
-                if 'ANGLAIS' in rue:
-                    return "Promenade des Anglais"
-                elif any(mot in rue for mot in ['BORON', 'ALBAN', 'BATTERIE', 'FORESTIER', 'MACCARANI']):
-                    return "Mont Boron"
-                elif any(mot in rue for mot in ['FRANCE', 'BUFFA', 'MASSENA', 'GRIMALDI', 'PARADIS', 'KARR', 'HALEVY', 'SUEDE', 'CONGRES', 'RIVOLI', 'MEDECIN', 'VICTOR HUGO']):
-                    return "Carré d'Or"
-                else:
-                    return "Hors Cible"
-            
-            df_nice['Quartier_Cible'] = df_nice['adresse_nom_voie'].apply(identifier_secteur)
-            
-            # On ne garde QUE vos 3 quartiers
-            df_premium = df_nice[df_nice['Quartier_Cible'] != "Hors Cible"]
-            
-            # Nettoyage de l'affichage
-            df_premium['valeur_fonciere'] = df_premium['valeur_fonciere'].astype(int)
-            return df_premium
+            storage_options = {'User-Agent': 'Mozilla/5.0'}
+            df = pd.read_csv(url, usecols=lambda c: c in colonnes_utiles, low_memory=False, storage_options=storage_options)
+            return filtrer_nice_premium(df)
         except Exception as e:
             return None
 
-    df_reelles = charger_vraies_donnees(annee)
+    df_reelles = None
+    
+    # Choix de la source : Fichier uploadé OU téléchargement automatique
+    if uploaded_file is not None:
+        try:
+            df_raw = pd.read_csv(uploaded_file, usecols=lambda c: c in colonnes_utiles, low_memory=False)
+            df_reelles = filtrer_nice_premium(df_raw)
+            st.success("Données chargées avec succès depuis votre fichier manuel !")
+        except Exception as e:
+            st.error("Erreur de lecture du fichier. Vérifiez qu'il s'agit bien d'un fichier DVF.")
+    else:
+        df_reelles = charger_vraies_donnees(annee)
 
+    # Affichage des résultats
     if df_reelles is not None and not df_reelles.empty:
-        st.success(f"Vraies données chargées ! {len(df_reelles)} transactions trouvées dans vos secteurs cibles pour {annee}.")
+        st.success(f"Opération réussie ! {len(df_reelles)} transactions trouvées dans vos secteurs cibles.")
         
         secteurs = ["Tous les secteurs cibles"] + list(df_reelles['Quartier_Cible'].unique())
         choix_secteur = st.selectbox("Filtrer par secteur précis :", secteurs)
@@ -120,11 +138,14 @@ elif page == "📊 Analyse DVF - Vraies Ventes (Ciblé)":
         else:
             df_affiche = df_reelles
 
-        # On affiche les données triées par date (les plus récentes d'abord)
         st.dataframe(df_affiche.sort_values(by='date_mutation', ascending=False)[['date_mutation', 'Quartier_Cible', 'adresse_nom_voie', 'type_local', 'surface_reelle_bati', 'valeur_fonciere']], use_container_width=True)
         
         if not df_affiche.empty:
             prix_moyen = int(df_affiche['valeur_fonciere'].mean())
-            st.metric(f"Prix moyen constaté (Vraies ventes {annee})", f"{prix_moyen:,} €".replace(',', ' '))
-    else:
-        st.warning(f"⚠️ Impossible de charger les vraies données de {annee}. Les serveurs de l'État sont peut-être surchargés, réessayez dans un instant.")
+            st.metric(f"Prix moyen constaté dans la sélection", f"{prix_moyen:,} €".replace(',', ' '))
+            
+    elif uploaded_file is None:
+        st.error(f"Impossible de récupérer automatiquement les données de {annee}.")
+        st.info("💡 **Solution express :**")
+        st.markdown(f"1. **[Cliquez ici pour télécharger le fichier officiel 06.csv (Année {annee})](https://files.data.gouv.fr/geo-dvf/latest/csv/{annee}/departements/06.csv)**")
+        st.markdown("2. Une fois téléchargé, glissez-le simplement dans la zone **'Plan B'** dans le menu gris à gauche.")
