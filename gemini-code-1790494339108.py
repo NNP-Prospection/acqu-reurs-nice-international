@@ -4,7 +4,7 @@ import pandas as pd
 # Configuration de la page
 st.set_page_config(page_title="Espace Acquéreurs & DVF - Nice", layout="wide")
 
-# Menu de navigation unifié
+# Menu de navigation
 st.sidebar.title("Navigation")
 page = st.sidebar.radio("Aller à la section", [
     "Analyse des Secteurs Phares (US)", 
@@ -68,81 +68,67 @@ elif page == "📄 Générateur de Lead - Guide Retraite":
         """)
 
 elif page == "📊 Analyse DVF - Marché de Nice":
-    st.title("📊 Analyse DVF - Données Locales de Nice")
+    st.title("📊 Analyse DVF - Marché Immobilier de Nice")
+    st.markdown("Exploitez vos extraits DVF pour vos avis de valeur et études de marché.")
     
-    # 1. Gestion de la mémoire persistante
-    if 'df_memoire' not in st.session_state:
-        st.session_state.df_memoire = None
+    # Importation simple sans restriction stricte de type pour débloquer Android/Samsung
+    uploaded_files = st.file_uploader("📁 Importer vos fichiers DVF (CSV)", accept_multiple_files=True)
 
-    # 2. Si aucun fichier n'est en mémoire, on affiche le module d'importation
-    if st.session_state.df_memoire is None:
-        st.markdown("Importez vos fichiers CSV DVF ci-dessous pour lancer l'analyse :")
-        uploaded_files = st.file_uploader("📁 Sélectionnez vos fichiers CSV DVF", type=['csv'], accept_multiple_files=True)
-        
-        if uploaded_files:
-            try:
-                with st.spinner("Fusion et mémorisation de vos fichiers en cours..."):
-                    liste_df = [pd.read_csv(f, low_memory=False, on_bad_lines='skip') for f in uploaded_files]
-                    st.session_state.df_memoire = pd.concat(liste_df, ignore_index=True)
-                st.rerun() # Recharge immédiate pour verrouiller l'affichage
-            except Exception as e:
-                st.error(f"Erreur lors de la lecture des fichiers : {e}")
-    
-    # 3. Dès que la mémoire est remplie, on masque le bouton d'import et on affiche directement les onglets
-    if st.session_state.df_memoire is not None:
-        df_brut = st.session_state.df_memoire
-        
-        # En-tête avec un bouton propre pour réinitialiser si besoin
-        col_titre, col_btn = st.columns([0.8, 0.2])
-        with col_titre:
-            st.success(f"✅ Base active : **{len(df_brut):,} transactions** en mémoire.")
-        with col_btn:
-            if st.button("🔄 Changer de fichier"):
-                st.session_state.df_memoire = None
-                st.rerun()
+    if uploaded_files:
+        try:
+            with st.spinner("Traitement des fichiers en cours..."):
+                liste_df = [pd.read_csv(f, low_memory=False, on_bad_lines='skip') for f in uploaded_files]
+                df_brut = pd.concat(liste_df, ignore_index=True)
+            
+            st.success(f"✅ Fichiers chargés avec succès ! ({len(df_brut):,} transactions enregistrées).")
 
-        # --- DIVISION EN DEUX SECTIONS DISTINCTES ---
-        tab1, tab2 = st.tabs([
-            "💰 1. Connaissance des vrais prix de vente", 
-            "📈 2. Tendances et Secteurs Clés"
-        ])
-        
-        with tab1:
-            st.subheader("Recherche par rue ou adresse précise")
-            st.markdown("Retrouvez instantanément le prix réel des ventes notariales par rue pour préparer vos avis de valeur.")
+            # --- DIVISION EN DEUX SECTIONS DISTINCTES ---
+            tab1, tab2 = st.tabs([
+                "💰 1. Connaissance des vrais prix de vente", 
+                "📈 2. Tendances et Secteurs Clés"
+            ])
             
-            recherche_rue = st.text_input("Entrez un nom de rue (ex: Anglais, France, Massena, Boron) :")
-            
-            if recherche_rue:
-                col_voie = [c for c in df_brut.columns if 'voie' in c.lower() or 'adresse' in c.lower() or 'rue' in c.lower()]
-                if col_voie:
-                    mask = df_brut[col_voie[0]].astype(str).str.contains(recherche_rue, case=False, na=False)
-                    df_resultats = df_brut[mask]
-                    
-                    st.metric("Transactions trouvées pour cette recherche", f"{len(df_resultats):,}")
-                    if not df_resultats.empty:
-                        colonnes_affichage = [c for c in ['date_mutation', 'valeur_fonciere', 'adresse_nom_voie', 'type_local', 'surface_reelle_bati'] if c in df_resultats.columns]
-                        st.dataframe(df_resultats[colonnes_affichage].head(100), use_container_width=True)
+            with tab1:
+                st.subheader("Recherche par rue ou adresse précise")
+                st.markdown("Retrouvez le prix réel des ventes notariales par rue pour préparer vos avis de valeur.")
+                
+                recherche_rue = st.text_input("Entrez un nom de rue (ex: Anglais, France, Massena, Boron) :")
+                
+                if recherche_rue:
+                    col_voie = [c for c in df_brut.columns if 'voie' in c.lower() or 'adresse' in c.lower() or 'rue' in c.lower()]
+                    if col_voie:
+                        mask = df_brut[col_voie[0]].astype(str).str.contains(recherche_rue, case=False, na=False)
+                        df_resultats = df_brut[mask]
+                        
+                        st.metric("Transactions trouvées pour cette recherche", f"{len(df_resultats):,}")
+                        if not df_resultats.empty:
+                            colonnes_affichage = [c for c in ['date_mutation', 'valeur_fonciere', 'adresse_nom_voie', 'type_local', 'surface_reelle_bati'] if c in df_resultats.columns]
+                            st.dataframe(df_resultats[colonnes_affichage].head(100), use_container_width=True)
+                        else:
+                            st.warning("Aucune transaction trouvée pour cette rue dans vos fichiers.")
                     else:
-                        st.warning("Aucune transaction trouvée pour cette rue dans vos fichiers.")
+                        st.error("Colonne d'adresse introuvable.")
                 else:
-                    st.error("Colonne d'adresse introuvable dans les colonnes du fichier.")
-            else:
-                st.info("💡 Saisissez un mot-clé ou un nom de rue ci-dessus pour interroger la base notariale.")
-                st.markdown("#### 🔍 Aperçu global de vos fichiers importés :")
-                colonnes_affichage = [c for c in ['date_mutation', 'valeur_fonciere', 'adresse_nom_voie', 'type_local', 'surface_reelle_bati'] if c in df_brut.columns]
-                st.dataframe(df_brut[colonnes_affichage].head(20), use_container_width=True)
-                    
-        with tab2:
-            st.subheader("Analyse comparative des secteurs clés")
-            st.markdown("Vue d'ensemble sur le dynamisme et les caractéristiques de vos zones de prédilection (**Carré d'Or, Promenade des Anglais, Mont Boron**).")
-            
-            st.info("💡 **Synthèse stratégique :** Ces indicateurs vous aident à positionner vos biens face à la demande locale et internationale à fort pouvoir d'achat.")
-            
-            df_synthese_marche = pd.DataFrame({
-                "Secteur Clé": ["Carré d'Or", "Promenade des Anglais", "Mont Boron"],
-                "Type de biens recherchés": ["Appartement urbain, piétonnier", "Vue mer frontale, standing", "Villas, résidences de prestige, calme"],
-                "Clientèle privilégiée": ["Actifs haut de gamme & Investisseurs", "Acquéreurs internationaux (US / Résidence secondaire)", "Amateurs de 'Quiet Luxury' & Intimité"],
-                "Atout clé pour la vente": ["Proximité immédiate des commerces et plages", "Panorama exceptionnel et mythe azuréen", "Vues panoramiques et discrétion absolue"]
-            })
-            st.dataframe(df_synthese_marche, use_container_width=True)
+                    st.info("💡 Saisissez un mot-clé ou un nom de rue ci-dessus pour interroger la base notariale.")
+                    st.markdown("#### 🔍 Aperçu des transactions importées :")
+                    colonnes_affichage = [c for c in ['date_mutation', 'valeur_fonciere', 'adresse_nom_voie', 'type_local', 'surface_reelle_bati'] if c in df_brut.columns]
+                    st.dataframe(df_brut[colonnes_affichage].head(20), use_container_width=True)
+                        
+            with tab2:
+                st.subheader("Analyse comparative des secteurs clés")
+                st.markdown("Vue d'ensemble sur le dynamisme de vos zones de prédilection (**Carré d'Or, Promenade des Anglais, Mont Boron**).")
+                
+                st.info("💡 **Synthèse stratégique :** Indicateurs clés pour positionner vos biens face à la demande à fort pouvoir d'achat.")
+                
+                df_synthese_marche = pd.DataFrame({
+                    "Secteur Clé": ["Carré d'Or", "Promenade des Anglais", "Mont Boron"],
+                    "Type de biens recherchés": ["Appartement urbain, piétonnier", "Vue mer frontale, standing", "Villas, résidences de prestige, calme"],
+                    "Clientèle privilégiée": ["Actifs haut de gamme & Investisseurs", "Acquéreurs internationaux (US / Résidence secondaire)", "Amateurs de 'Quiet Luxury' & Intimité"],
+                    "Atout clé pour la vente": ["Proximité immédiate des commerces et plages", "Panorama exceptionnel et mythe azuréen", "Vues panoramiques et discrétion absolue"]
+                })
+                st.dataframe(df_synthese_marche, use_container_width=True)
+
+        except Exception as e:
+            st.error(f"Erreur lors de la lecture des fichiers : {e}")
+    else:
+        st.info("💡 Veuillez sélectionner vos fichiers CSV ci-dessus pour lancer l'analyse.")
