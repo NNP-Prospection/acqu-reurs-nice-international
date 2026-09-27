@@ -39,27 +39,23 @@ elif page == "📄 Générateur de Lead - Guide Retraite":
 
 elif page == "📊 Analyse DVF - Marché de Nice":
     st.title("📊 Analyse DVF - Marché Immobilier de Nice & Sous-Secteurs")
-    st.markdown("Exploitation de votre base de données locale GitHub.")
+    st.markdown("Exploitation de votre base de données locale GitHub avec calcul du prix au m².")
     
     @st.cache_data(show_spinner="Lecture automatique de vos fichiers sur GitHub...")
     def charger_fichiers_github():
-        # L'application cherche TOUS les fichiers textes ou CSV dans votre GitHub
         fichiers = glob.glob("*.txt") + glob.glob("*.csv") + glob.glob("**/*.csv", recursive=True)
-        
         if not fichiers:
             return None, 0
             
         liste_df = []
         for f in fichiers:
             try:
-                # CORRECTION ICI : suppression de low_memory=False pour éviter le plantage
                 df = pd.read_csv(f, sep=None, engine='python', on_bad_lines='skip')
                 liste_df.append(df)
             except Exception as e:
                 pass
                 
         if liste_df:
-            # Fusionne tous vos fichiers en une seule grande base de données
             df_global = pd.concat(liste_df, ignore_index=True)
             df_global.columns = [str(c).strip() for c in df_global.columns]
             return df_global, len(fichiers)
@@ -71,60 +67,95 @@ elif page == "📊 Analyse DVF - Marché de Nice":
     if df_brut is not None and not df_brut.empty:
         st.success(f"✅ {nb_fichiers} fichier(s) détecté(s) et chargé(s) automatiquement ! ({len(df_brut):,} lignes lues).")
 
-        tab1, tab2 = st.tabs(["💰 Recherche & Analyse par Sous-Secteurs", "📈 Synthèse"])
+        tab1, tab2 = st.tabs(["💰 Recherche & Analyse au m²", "📈 Synthèse"])
         
         with tab1:
-            recherche_rue = st.text_input("Entrez un terme de recherche (ex: MONT BORON) :", value="MONT BORON")
+            recherche_rue = st.text_input("Entrez un nom de rue (ex: ANGLAIS, MASSENA, MONT BORON) :", value="ANGLAIS")
             
             if recherche_rue:
-                masque_global = df_brut.astype(str).apply(lambda col: col.str.contains(recherche_rue, case=False, na=False)).any(axis=1)
+                # Moteur de recherche intelligent (ignore les mots génériques)
+                mots_cles = recherche_rue.upper().split()
+                mots_a_ignorer = ['RUE', 'AVENUE', 'AV', 'BOULEVARD', 'BD', 'BVD', 'PROMENADE', 'PROM', 'DE', 'DES', 'LA', 'LE', 'LES', 'DU', 'D']
+                mots_utiles = [mot for mot in mots_cles if mot not in mots_a_ignorer]
+                
+                if not mots_utiles:
+                    mots_utiles = mots_cles
+                    
+                df_texte_global = df_brut.astype(str).agg(' '.join, axis=1).str.upper()
+                masque_global = pd.Series(True, index=df_brut.index)
+                
+                for mot in mots_utiles:
+                    masque_global &= df_texte_global.str.contains(mot, na=False)
+                    
                 df_resultats = df_brut[masque_global].copy()
                 
                 if not df_resultats.empty:
                     col_valeur = next((c for c in df_resultats.columns if 'valeur_fonciere' in c.lower() or 'prix' in c.lower()), None)
                     col_voie = next((c for c in df_resultats.columns if 'voie' in c.lower() or 'adresse' in c.lower()), None)
                     col_mutation = next((c for c in df_resultats.columns if 'id_mutation' in c.lower()), None)
+                    col_surface = next((c for c in df_resultats.columns if 'surface_reelle_bati' in c.lower() or 'surface' in c.lower()), None)
                     
-                    if col_valeur and col_mutation:
-                        # Nettoyage ultra-robuste des prix
+                    if col_valeur and col_mutation and col_surface:
+                        # Nettoyage des prix
                         df_resultats['prix_net'] = pd.to_numeric(
                             df_resultats[col_valeur].astype(str).str.replace(',', '.').str.replace(' ', '').str.extract(r'([\d\.]+)', expand=False), 
                             errors='coerce'
                         )
                         
-                        # DÉDUPLICATION : Une seule ligne par vente réelle
-                        df_uniques = df_resultats.drop_duplicates(subset=[col_mutation])
+                        # Nettoyage des surfaces
+                        df_resultats['surface_nette'] = pd.to_numeric(
+                            df_resultats[col_surface].astype(str).str.replace(',', '.').str.replace(' ', '').str.extract(r'([\d\.]+)', expand=False), 
+                            errors='coerce'
+                        )
                         
-                        # CLASSEMENT DU MONT BORON
-                        if "MONT BORON" in recherche_rue.upper():
+                        # DÉDUPLICATION : Une seule ligne par vente réelle
+                        df_uniques = df_resultats.drop_duplicates(subset=[col_mutation]).copy()
+                        
+                        # On garde uniquement les ventes où l'on a un prix ET une surface valide (> 0)
+                        df_uniques = df_uniques[(df_uniques['prix_net'] > 0) & (df_uniques['surface_nette'] > 0)].copy()
+                        
+                        # CALCUL DU PRIX AU MÈTRE CARRÉ
+                        df_uniques['prix_m2'] = df_uniques['prix_net'] / df_uniques['surface_nette']
+                        
+                        # CLASSEMENT DU MONT BORON (si le terme est cherché)
+                        if "BORON" in recherche_rue.upper():
                             def classifier_mont_boron(adresse):
                                 adresse_str = str(adresse).upper()
                                 if any(terme in adresse_str for terme in ['FORESTIERE', 'ALBAN', 'MONT BORON', 'REPUBLIQUE', 'MAETERLINCK', 'JEAN LORRAIN']):
-                                    return "⭐ Mont Boron - Adresses Sélectes (Boulevards / Corniches)"
+                                    return "⭐ Mont Boron - Adresses Sélectes"
                                 else:
                                     return "🏡 Mont Boron - Abords / Périphérie"
                             
                             if col_voie:
                                 df_uniques['Sous_Secteur'] = df_uniques[col_voie].apply(classifier_mont_boron)
                                 
-                                st.markdown("### 🏆 Analyse comparative des Vraies Ventes (Dédoublonnées)")
+                                st.markdown("### 🏆 Analyse comparative au m²")
                                 for sous_sec, groupe in df_uniques.groupby('Sous_Secteur'):
-                                    prix_moyen = groupe['prix_net'].mean()
-                                    st.markdown(f"**{sous_sec}** ({len(groupe)} ventes réelles) — Prix de vente moyen : **{prix_moyen:,.0f} €**".replace(",", " "))
+                                    prix_moyen_m2 = groupe['prix_m2'].mean()
+                                    st.markdown(f"**{sous_sec}** ({len(groupe)} ventes) — Prix moyen : **{prix_moyen_m2:,.0f} € / m²**".replace(",", " "))
                         
                         # Indicateurs globaux
-                        st.markdown("#### 📊 Indicateurs globaux sur votre recherche :")
-                        c1, c2 = st.columns(2)
-                        c1.metric("Prix moyen (ventes uniques)", f"{df_uniques['prix_net'].mean():,.0f} €".replace(",", " "))
-                        c2.metric("Prix médian", f"{df_uniques['prix_net'].median():,.0f} €".replace(",", " "))
+                        st.markdown(f"#### 📊 Indicateurs globaux sur '{' '.join(mots_utiles)}' :")
+                        if not df_uniques.empty:
+                            c1, c2, c3 = st.columns(3)
+                            c1.metric("Prix moyen au m²", f"{df_uniques['prix_m2'].mean():,.0f} €/m²".replace(",", " "))
+                            c2.metric("Prix médian au m²", f"{df_uniques['prix_m2'].median():,.0f} €/m²".replace(",", " "))
+                            c3.metric("Surface moyenne vendue", f"{df_uniques['surface_nette'].mean():,.0f} m²".replace(",", " "))
+                        else:
+                            st.warning("Aucune surface n'est renseignée pour ces ventes (impossible de calculer le prix au m²).")
                     
-                    st.markdown("#### 📋 Détail des lignes correspondantes :")
-                    st.dataframe(df_resultats.head(100), use_container_width=True)
+                    st.markdown("#### 📋 Détail des ventes retenues :")
+                    # Affichage plus lisible des données pertinentes
+                    colonnes_a_afficher = [c for c in ['date_mutation', col_voie, 'prix_net', 'surface_nette', 'prix_m2', 'type_local'] if c in df_uniques.columns]
+                    if colonnes_a_afficher:
+                        st.dataframe(df_uniques[colonnes_a_afficher].head(100).style.format({'prix_net': "{:,.0f} €", 'surface_nette': "{:,.0f} m²", 'prix_m2': "{:,.0f} €/m²"}), use_container_width=True)
+                    else:
+                        st.dataframe(df_resultats.head(100), use_container_width=True)
                 else:
-                    st.warning("Aucun résultat trouvé.")
+                    st.warning("Aucun résultat trouvé. L'adresse n'est peut-être pas dans cet extrait de données.")
                     
         with tab2:
             st.markdown("### Synthèse des Secteurs")
             st.info("Données prêtes pour l'analyse patrimoniale.")
     else:
-        st.error("⚠️ Aucun fichier texte (.txt ou .csv) n'a pu être lu dans votre GitHub.")
+        st.error("⚠️ Aucun fichier texte n'a pu être lu dans votre GitHub.")
