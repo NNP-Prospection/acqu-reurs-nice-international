@@ -1,5 +1,7 @@
 import streamlit as st
 import pandas as pd
+import glob
+import os
 
 # Configuration de la page
 st.set_page_config(page_title="Espace Acquéreurs & DVF - Nice", layout="wide")
@@ -69,62 +71,64 @@ elif page == "📄 Générateur de Lead - Guide Retraite":
 
 elif page == "📊 Analyse DVF - Marché de Nice":
     st.title("📊 Analyse DVF - Marché Immobilier de Nice")
-    st.markdown("Exploitez vos extraits DVF pour vos avis de valeur et études de marché.")
+    st.markdown("Chargement automatique des données officielles intégrées au projet.")
     
-    uploaded_files = st.file_uploader("📁 Importer vos fichiers DVF (CSV)", accept_multiple_files=True)
+    @st.cache_data(show_spinner="Lecture automatique de vos fichiers DVF sur le serveur...")
+    def charger_fichiers_dossier():
+        # Recherche tous les fichiers CSV dans le dossier 'data'
+        chemins_fichiers = glob.glob("data/*.csv")
+        if not chemins_fichiers:
+            return None
+        liste_df = [pd.read_csv(f, low_memory=False, on_bad_lines='skip') for f in chemins_fichiers]
+        return pd.concat(liste_df, ignore_index=True)
 
-    if uploaded_files:
-        try:
-            with st.spinner("Traitement des fichiers en cours..."):
-                liste_df = [pd.read_csv(f, low_memory=False, on_bad_lines='skip') for f in uploaded_files]
-                df_brut = pd.concat(liste_df, ignore_index=True)
-            
-            st.success(f"✅ Fichiers chargés avec succès ! ({len(df_brut):,} transactions enregistrées).")
+    df_brut = charger_fichiers_dossier()
 
-            # --- DIVISION EN DEUX SECTIONS DISTINCTES ---
-            tab1, tab2 = st.tabs([
-                "💰 1. Connaissance des vrais prix de vente", 
-                "📈 2. Tendances et Secteurs Clés"
-            ])
+    if df_brut is not None and not df_brut.empty:
+        st.success(f"✅ Base de données chargée automatiquement ({len(df_brut):,} transactions prêtes).")
+
+        # --- DIVISION EN DEUX SECTIONS DISTINCTES ---
+        tab1, tab2 = st.tabs([
+            "💰 1. Connaissance des vrais prix de vente", 
+            "📈 2. Tendances et Secteurs Clés"
+        ])
+        
+        with tab1:
+            st.subheader("Recherche par rue, mot-clé ou adresse")
+            st.markdown("Retrouvez le prix réel des ventes notariales en filtrant par nom de rue (ex: *Anglais*, *France*, *Massena*).")
             
-            with tab1:
-                st.subheader("Recherche par rue, mot-clé ou adresse")
-                st.markdown("Retrouvez le prix réel des ventes notariales en filtrant par nom de rue (ex: *Anglais*, *France*, *Massena*).")
+            recherche_rue = st.text_input("Entrez un terme de recherche :")
+            
+            if recherche_rue:
+                masque_global = df_brut.astype(str).apply(lambda col: col.str.contains(recherche_rue, case=False, na=False)).any(axis=1)
+                df_resultats = df_brut[masque_global]
                 
-                recherche_rue = st.text_input("Entrez un terme de recherche :")
-                
-                if recherche_rue:
-                    # Recherche intelligente dans l'ensemble des colonnes textuelles du fichier
-                    masque_global = df_brut.astype(str).apply(lambda col: col.str.contains(recherche_rue, case=False, na=False)).any(axis=1)
-                    df_resultats = df_brut[masque_global]
-                    
-                    st.metric("Transactions correspondantes trouvées", f"{len(df_resultats):,}")
-                    if not df_resultats.empty:
-                        colonnes_affichage = [c for c in ['date_mutation', 'valeur_fonciere', 'adresse_nom_voie', 'type_local', 'surface_reelle_bati'] if c in df_resultats.columns]
-                        st.dataframe(df_resultats[colonnes_affichage].head(100), use_container_width=True)
-                    else:
-                        st.warning("Aucun résultat ne correspond à votre recherche dans ces fichiers.")
+                st.metric("Transactions correspondantes trouvées", f"{len(df_resultats):,}")
+                if not df_resultats.empty:
+                    colonnes_affichage = [c for c in ['date_mutation', 'valeur_fonciere', 'adresse_nom_voie', 'type_local', 'surface_reelle_bati'] if c in df_resultats.columns]
+                    st.dataframe(df_resultats[colonnes_affichage].head(100), use_container_width=True)
                 else:
-                    st.info("💡 Saisissez un mot-clé ci-dessus (nom de rue, etc.) pour filtrer la base notariale.")
-                    st.markdown("#### 🔍 Aperçu des transactions importées :")
-                    colonnes_affichage = [c for c in ['date_mutation', 'valeur_fonciere', 'adresse_nom_voie', 'type_local', 'surface_reelle_bati'] if c in df_brut.columns]
-                    st.dataframe(df_brut[colonnes_affichage].head(20), use_container_width=True)
-                        
-            with tab2:
-                st.subheader("Analyse comparative des secteurs clés")
-                st.markdown("Vue d'ensemble sur le dynamisme de vos zones de prédilection (**Carré d'Or, Promenade des Anglais, Mont Boron**).")
-                
-                st.info("💡 **Synthèse stratégique :** Indicateurs clés pour positionner vos biens face à la demande à fort pouvoir d'achat.")
-                
-                df_synthese_marche = pd.DataFrame({
-                    "Secteur Clé": ["Carré d'Or", "Promenade des Anglais", "Mont Boron"],
-                    "Type de biens recherchés": ["Appartement urbain, piétonnier", "Vue mer frontale, standing", "Villas, résidences de prestige, calme"],
-                    "Clientèle privilégiée": ["Actifs haut de gamme & Investisseurs", "Acquéreurs internationaux (US / Résidence secondaire)", "Amateurs de 'Quiet Luxury' & Intimité"],
-                    "Atout clé pour la vente": ["Proximité immédiate des commerces et plages", "Panorama exceptionnel et mythe azuréen", "Vues panoramiques et discrétion absolue"]
-                })
-                st.dataframe(df_synthese_marche, use_container_width=True)
+                    st.warning("Aucun résultat ne correspond à votre recherche dans ces fichiers.")
+            else:
+                st.info("💡 Saisissez un mot-clé ci-dessus (nom de rue, etc.) pour filtrer la base notariale.")
+                st.markdown("#### 🔍 Aperçu des transactions :")
+                colonnes_affichage = [c for c in ['date_mutation', 'valeur_fonciere', 'adresse_nom_voie', 'type_local', 'surface_reelle_bati'] if c in df_brut.columns]
+                st.dataframe(df_brut[colonnes_affichage].head(20), use_container_width=True)
+                    
+        with tab2:
+            st.subheader("Analyse comparative des secteurs clés")
+            st.markdown("Vue d'ensemble sur le dynamisme de vos zones de prédilection (**Carré d'Or, Promenade des Anglais, Mont Boron**).")
+            
+            st.info("💡 **Synthèse stratégique :** Indicateurs clés pour positionner vos biens face à la demande à fort pouvoir d'achat.")
+            
+            df_synthese_marche = pd.DataFrame({
+                "Secteur Clé": ["Carré d'Or", "Promenade des Anglais", "Mont Boron"],
+                "Type de biens recherchés": ["Appartement urbain, piétonnier", "Vue mer frontale, standing", "Villas, résidences de prestige, calme"],
+                "Clientèle privilégiée": ["Actifs haut de gamme & Investisseurs", "Acquéreurs internationaux (US / Résidence secondaire)", "Amateurs de 'Quiet Luxury' & Intimité"],
+                "Atout clé pour la vente": ["Proximité immédiate des commerces et plages", "Panorama exceptionnel et mythe azuréen", "Vues panoramiques et discrétion absolue"]
+            })
+            st.dataframe(df_synthese_marche, use_container_width=True)
 
-        except Exception as e:
-            st.error(f"Erreur lors de la lecture des fichiers : {e}")
     else:
-        st.info("💡 Veuillez sélectionner vos fichiers CSV ci-dessus pour lancer l'analyse.")
+        st.warning("⚠️ Aucun dossier 'data' ou aucun fichier CSV n'a été détecté sur GitHub.")
+        st.markdown("Veuillez créer un dossier nommé **`data`** à la racine de votre dépôt GitHub et y déposer vos fichiers CSV. Une fois fait, l'application les chargera automatiquement pour toujours !")
