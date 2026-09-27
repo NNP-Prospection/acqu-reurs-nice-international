@@ -71,21 +71,18 @@ elif page == "📊 Analyse DVF - Vraies Ventes (Ciblé)":
     st.title("📊 Analyse DVF - Vraies Ventes de l'État (Nice Premium)")
     st.markdown("Ce module filtre **uniquement** vos secteurs de prédilection en analysant le nom des rues sur les données officielles.")
     
-    annee = st.selectbox("Sélectionnez l'année d'analyse :", ["2026", "2025", "2024", "2023"], index=1)
-    
-    # ---------------------------------------------------------
-    # SECURITÉ : BOUTON D'IMPORTATION MANUELLE (MULTIPLE)
-    # ---------------------------------------------------------
+    if 'liste_dfs_memoire' not in st.session_state:
+        st.session_state.liste_dfs_memoire = []
+
     st.sidebar.markdown("---")
-    st.sidebar.warning("📁 **Plan B (Import manuel)**")
+    st.sidebar.warning("📁 **Importation progressive (Fichier par fichier)**")
     
-    # NOUVEAUTÉ : On autorise la sélection de plusieurs fichiers (accept_multiple_files=True)
-    uploaded_files = st.sidebar.file_uploader("Importez ici vos fichiers CSV (plusieurs possibles)", type=['csv'], accept_multiple_files=True)
+    # MODIFICATION : On supprime la restriction stricte des types pour ne plus avoir de fichiers grisés
+    fichier_ajoute = st.sidebar.file_uploader("Ajouter un fichier de données", type=None, key="import_unitaire")
 
     colonnes_utiles = ['date_mutation', 'valeur_fonciere', 'nom_commune', 'adresse_nom_voie', 'type_local', 'surface_reelle_bati']
 
     def filtrer_nice_premium(df_brut):
-        # On s'assure d'avoir la colonne des communes pour éviter les erreurs
         if 'nom_commune' not in df_brut.columns:
             return pd.DataFrame()
             
@@ -108,36 +105,25 @@ elif page == "📊 Analyse DVF - Vraies Ventes (Ciblé)":
         df_premium['valeur_fonciere'] = df_premium['valeur_fonciere'].astype(int)
         return df_premium
 
-    @st.cache_data(show_spinner=f"Connexion automatique aux serveurs de l'État pour {annee}...")
-    def charger_vraies_donnees(annee_choisie):
-        url = f"https://files.data.gouv.fr/geo-dvf/latest/csv/{annee_choisie}/departements/06.csv"
+    if fichier_ajoute is not None:
         try:
-            storage_options = {'User-Agent': 'Mozilla/5.0'}
-            df = pd.read_csv(url, usecols=lambda c: c in colonnes_utiles, low_memory=False, storage_options=storage_options)
-            return filtrer_nice_premium(df)
+            df_temp = pd.read_csv(fichier_ajoute, low_memory=False)
+            st.session_state.liste_dfs_memoire.append(df_temp)
+            st.sidebar.success("Fichier ajouté à la pile avec succès !")
         except Exception as e:
-            return None
+            st.sidebar.error(f"Erreur de lecture : assurez-vous qu'il s'agit d'un fichier texte/CSV valide ({e})")
+
+    if st.session_state.liste_dfs_memoire:
+        if st.sidebar.button("🗑️ Vider tous les fichiers importés"):
+            st.session_state.liste_dfs_memoire = []
+            st.rerun()
 
     df_reelles = None
-    
-    # Choix de la source : Fichiers uploadés OU téléchargement automatique
-    if uploaded_files: # S'il y a au moins un fichier
-        try:
-            liste_dfs = []
-            for file in uploaded_files:
-                df_temp = pd.read_csv(file, usecols=lambda c: c in colonnes_utiles, low_memory=False)
-                liste_dfs.append(df_temp)
-            
-            # On regroupe tous les fichiers ensemble (concaténation)
-            df_raw = pd.concat(liste_dfs, ignore_index=True)
-            df_reelles = filtrer_nice_premium(df_raw)
-            st.sidebar.success(f"{len(uploaded_files)} fichier(s) combiné(s) avec succès !")
-        except Exception as e:
-            st.error("Erreur de lecture du fichier. Vérifiez qu'il s'agit bien d'un fichier DVF.")
-    else:
-        df_reelles = charger_vraies_donnees(annee)
+    if st.session_state.liste_dfs_memoire:
+        df_raw = pd.concat(st.session_state.liste_dfs_memoire, ignore_index=True)
+        df_reelles = filtrer_nice_premium(df_raw)
+        st.info(f"💾 Nombre total de fichiers cumulés : **{len(st.session_state.liste_dfs_memoire)}**")
 
-    # Affichage des résultats
     if df_reelles is not None and not df_reelles.empty:
         st.success(f"Opération réussie ! {len(df_reelles)} transactions trouvées dans vos secteurs cibles.")
         
@@ -154,6 +140,5 @@ elif page == "📊 Analyse DVF - Vraies Ventes (Ciblé)":
         if not df_affiche.empty:
             prix_moyen = int(df_affiche['valeur_fonciere'].mean())
             st.metric(f"Prix moyen constaté dans la sélection", f"{prix_moyen:,} €".replace(',', ' '))
-            
-    elif not uploaded_files:
-        st.error(f"Impossible de récupérer automatiquement les données de {annee}.")
+    else:
+        st.warning("⚠️ Aucun fichier n'a encore été importé. Utilisez le bouton dans la barre latérale pour importer vos fichiers.")
