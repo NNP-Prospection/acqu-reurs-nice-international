@@ -10,7 +10,7 @@ page = st.sidebar.radio("Aller à la section", [
     "Analyse des Secteurs Phares (US)", 
     "Suivi des Profils Acquéreurs", 
     "📄 Générateur de Lead - Guide Retraite",
-    "📊 Analyse DVF - Outil Pro (06)"
+    "📊 Analyse DVF - Marché de Nice"
 ])
 
 if page == "Analyse des Secteurs Phares (US)":
@@ -67,33 +67,38 @@ elif page == "📄 Générateur de Lead - Guide Retraite":
         5. **Call-to-Action:** "Contact your dedicated Riviera real estate expert."
         """)
 
-elif page == "📊 Analyse DVF - Outil Pro (06)":
-    st.title("📊 Analyse DVF - Marché Immobilier de Nice")
-    st.markdown("Exploitez vos données notariales pour argumenter vos estimations et cibler vos investissements.")
+elif page == "📊 Analyse DVF - Marché de Nice":
+    st.title("📊 Analyse DVF - Données Locales de Nice")
+    st.markdown("Importez vos extraits DVF une seule fois : ils resteront mémorisés en arrière-plan pour toutes vos analyses.")
     
-    # Initialisation de la mémoire globale de l'application
-    if 'df_global' not in st.session_state:
-        st.session_state.df_global = None
+    # 1. Initialisation de la mémoire persistante
+    if 'df_memoire' not in st.session_state:
+        st.session_state.df_memoire = None
 
-    uploaded_file = st.file_uploader("📁 Importez votre fichier CSV DVF (mémorisé une fois chargé)", type=None)
-
-    if uploaded_file is not None:
-        try:
-            with st.spinner("Mémorisation et analyse des transactions en cours..."):
-                df_brut = pd.read_csv(uploaded_file, low_memory=False, on_bad_lines='skip')
-                st.session_state.df_global = df_brut
-        except Exception as e:
-            st.error(f"⚠️ Erreur lors de la lecture du fichier : {e}")
-
-    # Si le fichier est en mémoire, on affiche directement l'outil sans redemander l'import
-    if st.session_state.df_global is not None:
-        df_brut = st.session_state.df_global
-        st.success(f"✅ Données actives en mémoire ({len(df_brut):,} lignes chargées et prêtes à l'emploi).")
+    # 2. Zone d'importation (affichée uniquement si aucun fichier n'est encore en mémoire)
+    if st.session_state.df_memoire is None:
+        uploaded_files = st.file_uploader("📁 Sélectionnez vos fichiers CSV DVF", type=['csv'], accept_multiple_files=True)
         
-        # Bouton pour réinitialiser si besoin de changer de fichier
-        if st.sidebar.button("🔄 Changer de fichier DVF"):
-            st.session_state.df_global = None
+        if uploaded_files:
+            try:
+                with st.spinner("Fusion et mémorisation de vos fichiers en cours..."):
+                    liste_df = [pd.read_csv(f, low_memory=False, on_bad_lines='skip') for f in uploaded_files]
+                    st.session_state.df_memoire = pd.concat(liste_df, ignore_index=True)
+                st.success(f"Fichiers mémorisés avec succès ! ({len(st.session_state.df_memoire):,} transactions au total).")
+                st.rerun() # Recharge instantanée pour afficher les onglets d'analyse
+            except Exception as e:
+                st.error(f"Erreur lors de la lecture des fichiers : {e}")
+    
+    # 3. Dès que les données sont en mémoire, on affiche les deux sections (et elles ne s'effacent plus !)
+    if st.session_state.df_memoire is not None:
+        df_brut = st.session_state.df_memoire
+        
+        # Bouton discret dans la barre latérale pour réinitialiser si vous voulez changer de fichiers un jour
+        if st.sidebar.button("🗑️ Effacer et changer de fichiers DVF"):
+            st.session_state.df_memoire = None
             st.rerun()
+            
+        st.success(f"✅ Base de données active en mémoire ({len(df_brut):,} lignes prêtes).")
 
         # --- DIVISION EN DEUX SECTIONS DISTINCTES ---
         tab1, tab2 = st.tabs([
@@ -105,7 +110,7 @@ elif page == "📊 Analyse DVF - Outil Pro (06)":
             st.subheader("Recherche par rue ou adresse précise")
             st.markdown("Retrouvez instantanément le prix réel des ventes notariales par rue pour préparer vos avis de valeur.")
             
-            recherche_rue = st.text_input("Entrez un nom de rue (ex: Promenade des Anglais, rue de France, etc.) :")
+            recherche_rue = st.text_input("Entrez un nom de rue (ex: Anglais, France, Massena, Boron) :")
             
             if recherche_rue:
                 col_voie = [c for c in df_brut.columns if 'voie' in c.lower() or 'adresse' in c.lower() or 'rue' in c.lower()]
@@ -115,16 +120,18 @@ elif page == "📊 Analyse DVF - Outil Pro (06)":
                     
                     st.metric("Transactions trouvées pour cette recherche", f"{len(df_resultats):,}")
                     if not df_resultats.empty:
-                        st.dataframe(df_resultats.head(100), use_container_width=True)
+                        colonnes_affichage = [c for c in ['date_mutation', 'valeur_fonciere', 'adresse_nom_voie', 'type_local', 'surface_reelle_bati'] if c in df_resultats.columns]
+                        st.dataframe(df_resultats[colonnes_affichage].head(100), use_container_width=True)
                     else:
-                        st.warning("Aucune transaction trouvée pour cette rue exacte dans ce fichier.")
+                        st.warning("Aucune transaction trouvée pour cette rue dans vos fichiers.")
                 else:
-                    st.error("La colonne d'adresse n'a pas été identifiée automatiquement dans ce fichier.")
+                    st.error("Colonne d'adresse introuvable dans les colonnes du fichier.")
             else:
                 st.info("💡 Saisissez un mot-clé ou un nom de rue ci-dessus pour interroger la base notariale.")
-                st.markdown("#### 🔍 Aperçu global brut :")
-                st.dataframe(df_brut.head(20), use_container_width=True)
-                
+                st.markdown("#### 🔍 Aperçu global de vos fichiers importés :")
+                colonnes_affichage = [c for c in ['date_mutation', 'valeur_fonciere', 'adresse_nom_voie', 'type_local', 'surface_reelle_bati'] if c in df_brut.columns]
+                st.dataframe(df_brut[colonnes_affichage].head(20), use_container_width=True)
+                    
         with tab2:
             st.subheader("Analyse comparative des secteurs clés")
             st.markdown("Vue d'ensemble sur le dynamisme et les caractéristiques de vos zones de prédilection (**Carré d'Or, Promenade des Anglais, Mont Boron**).")
@@ -138,5 +145,3 @@ elif page == "📊 Analyse DVF - Outil Pro (06)":
                 "Atout clé pour la vente": ["Proximité immédiate des commerces et plages", "Panorama exceptionnel et mythe azuréen", "Vues panoramiques et discrétion absolue"]
             })
             st.dataframe(df_synthese_marche, use_container_width=True)
-    else:
-        st.info("💡 Veuillez importer votre fichier CSV DVF une seule fois via le bouton ci-dessus. Il restera enregistré en mémoire pour toutes vos recherches !")
