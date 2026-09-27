@@ -69,14 +69,14 @@ elif page == "📄 Générateur de Lead - Guide Retraite":
 
 elif page == "📊 Analyse DVF - Marché de Nice":
     st.title("📊 Analyse DVF - Données Locales de Nice")
-    st.markdown("Importez vos extraits DVF une seule fois : ils resteront mémorisés en arrière-plan pour toutes vos analyses.")
     
-    # 1. Initialisation de la mémoire persistante
+    # 1. Gestion de la mémoire persistante
     if 'df_memoire' not in st.session_state:
         st.session_state.df_memoire = None
 
-    # 2. Zone d'importation (affichée uniquement si aucun fichier n'est encore en mémoire)
+    # 2. Si aucun fichier n'est en mémoire, on affiche le module d'importation
     if st.session_state.df_memoire is None:
+        st.markdown("Importez vos fichiers CSV DVF ci-dessous pour lancer l'analyse :")
         uploaded_files = st.file_uploader("📁 Sélectionnez vos fichiers CSV DVF", type=['csv'], accept_multiple_files=True)
         
         if uploaded_files:
@@ -84,21 +84,22 @@ elif page == "📊 Analyse DVF - Marché de Nice":
                 with st.spinner("Fusion et mémorisation de vos fichiers en cours..."):
                     liste_df = [pd.read_csv(f, low_memory=False, on_bad_lines='skip') for f in uploaded_files]
                     st.session_state.df_memoire = pd.concat(liste_df, ignore_index=True)
-                st.success(f"Fichiers mémorisés avec succès ! ({len(st.session_state.df_memoire):,} transactions au total).")
-                st.rerun() # Recharge instantanée pour afficher les onglets d'analyse
+                st.rerun() # Recharge immédiate pour verrouiller l'affichage
             except Exception as e:
                 st.error(f"Erreur lors de la lecture des fichiers : {e}")
     
-    # 3. Dès que les données sont en mémoire, on affiche les deux sections (et elles ne s'effacent plus !)
+    # 3. Dès que la mémoire est remplie, on masque le bouton d'import et on affiche directement les onglets
     if st.session_state.df_memoire is not None:
         df_brut = st.session_state.df_memoire
         
-        # Bouton discret dans la barre latérale pour réinitialiser si vous voulez changer de fichiers un jour
-        if st.sidebar.button("🗑️ Effacer et changer de fichiers DVF"):
-            st.session_state.df_memoire = None
-            st.rerun()
-            
-        st.success(f"✅ Base de données active en mémoire ({len(df_brut):,} lignes prêtes).")
+        # En-tête avec un bouton propre pour réinitialiser si besoin
+        col_titre, col_btn = st.columns([0.8, 0.2])
+        with col_titre:
+            st.success(f"✅ Base active : **{len(df_brut):,} transactions** en mémoire.")
+        with col_btn:
+            if st.button("🔄 Changer de fichier"):
+                st.session_state.df_memoire = None
+                st.rerun()
 
         # --- DIVISION EN DEUX SECTIONS DISTINCTES ---
         tab1, tab2 = st.tabs([
