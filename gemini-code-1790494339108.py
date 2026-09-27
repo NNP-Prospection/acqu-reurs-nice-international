@@ -71,17 +71,15 @@ elif page == "📊 Analyse DVF - Import Local (06)":
     st.title("📊 Analyse DVF - Importation de vos fichiers locaux")
     st.markdown("Importez votre extrait CSV de données DVF pour analyser instantanément les transactions de Nice et de vos secteurs cibles.")
     
-    # Bouton d'upload dans la zone principale (plus grand et plus accessible que la barre latérale)
-    uploaded_file = st.file_uploader("📁 Sélectionnez votre fichier CSV DVF", type=['csv'])
+    # type=None supprime le filtre restrictif du navigateur et dégrise les fichiers sur tablette
+    uploaded_file = st.file_uploader("📁 Sélectionnez votre fichier DVF", type=None)
 
     if uploaded_file is not None:
         try:
             with st.spinner("Traitement du fichier en cours..."):
-                # Lecture optimisée pour éviter les saturations mémoire
                 colonnes = ['date_mutation', 'valeur_fonciere', 'nom_commune', 'adresse_nom_voie', 'type_local', 'surface_reelle_bati']
                 df_brut = pd.read_csv(uploaded_file, usecols=lambda c: c in colonnes, low_memory=False)
                 
-                # Filtrage automatique sur Nice
                 df_nice = df_brut[df_brut['nom_commune'].str.contains('Nice', case=False, na=False)].copy()
                 df_nice = df_nice.dropna(subset=['valeur_fonciere', 'adresse_nom_voie'])
                 
@@ -117,4 +115,4 @@ elif page == "📊 Analyse DVF - Import Local (06)":
         except Exception as e:
             st.error("⚠️ Erreur lors de la lecture du fichier. Assurez-vous qu'il s'agit bien d'un fichier CSV DVF valide.")
     else:
-        st.info("💡 Cliquez sur le bouton ci-dessus pour choisir et importer votre fichier CSV depuis votre tablette.")
+        st.info("💡 Cliquez sur le bouton ci-dessus : vos fichiers ne seront plus grisés et vous pourrez les sélectionner.")
