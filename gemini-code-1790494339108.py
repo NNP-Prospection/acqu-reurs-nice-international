@@ -10,7 +10,7 @@ page = st.sidebar.radio("Aller à la section", [
     "Analyse des Secteurs Phares (US)", 
     "Suivi des Profils Acquéreurs", 
     "Générateur de Lead - Guide Retraite",
-    "📊 Analyse DVF - Nice (Optimisée)"  # <--- Le nom a été mis à jour
+    "📊 Analyse DVF - Nice (Optimisée)"
 ])
 
 if page == "Analyse des Secteurs Phares (US)":
@@ -19,7 +19,6 @@ if page == "Analyse des Secteurs Phares (US)":
     st.markdown("### 🎯 Analyse des Secteurs Cibles pour la Clientèle Américaine")
     st.markdown("Ces trois zones concentrent l'essentiel de la demande des acheteurs venus de New York, Boston et Washington.")
     
-    # Tableau récapitulatif
     data_secteurs = {
         "Secteur": ["Carré d'Or", "Promenade des Anglais", "Mont Boron"],
         "Profil recherché": ["Urbain, actif, commerces et mer à pied", "Vue mer frontale, mythe azuréen", "Quiet luxury, intimité, panoramas"],
@@ -48,43 +47,29 @@ elif page == "Générateur de Lead - Guide Retraite":
 elif page == "📊 Analyse DVF - Nice (Optimisée)":
     st.title("📊 Analyse DVF ciblée - Ville de Nice")
     st.markdown("""
-    Cette section récupère automatiquement une version allégée des données officielles de **Nice** uniquement. 
-    Choisissez l'année ci-dessous pour lancer l'extraction.
+    Cette section récupère automatiquement les données officielles consolidées de **Nice** pour les années antérieures stables.
     """)
     
-    # Sélecteur d'année (2026 pourrait ne pas être encore totalement consolidé par l'État en septembre)
-    annee = st.selectbox("Sélectionnez l'année d'analyse", ["2026", "2025", "2024"], index=1)
+    # Sélection des années où les données sont garanties d'être disponibles
+    annee = st.selectbox("Sélectionnez l'année d'analyse", ["2024", "2023", "2022"], index=0)
     
-    # Construction de l'URL officielle basée sur l'année choisie
     URL_DVF = f"https://files.data.gouv.fr/geo-dvf/latest/csv/{annee}/departements/06.csv"
     
-    @st.cache_data(show_spinner=f"Téléchargement et filtrage ultra-rapide des données de Nice pour {annee}...")
+    @st.cache_data(show_spinner=f"Téléchargement et filtrage des données de Nice pour {annee}...")
     def charger_donnees_nice(url):
         try:
-            # Astuce pour ne pas saturer la mémoire : on ne lit que les colonnes dont on a besoin
             colonnes_utiles = ['date_mutation', 'valeur_fonciere', 'nom_commune', 'type_local', 'surface_reelle_bati']
-            
-            # Lecture du fichier
             df = pd.read_csv(url, usecols=lambda c: c in colonnes_utiles, low_memory=False)
-            
-            # On filtre immédiatement pour ne garder QUE la ville de Nice
             df_nice = df[df['nom_commune'].str.contains('Nice', case=False, na=False)]
-            
-            # On supprime les lignes sans valeur foncière pour nettoyer les données
             df_nice = df_nice.dropna(subset=['valeur_fonciere'])
-            
             return df_nice
         except Exception as e:
             return None
 
-    # Exécution du chargement
     df = charger_donnees_nice(URL_DVF)
 
     if df is not None and not df.empty:
         st.success(f"Données de Nice pour {annee} chargées avec succès ! ({len(df):,} transactions immobilières trouvées)")
-        
-        # Affichage du tableau de données de Nice
         st.dataframe(df.sort_values(by='date_mutation', ascending=False).head(100), use_container_width=True)
-        
     else:
-        st.warning(f"⚠️ Les données de l'année {annee} ne sont pas encore disponibles sur les serveurs de l'État, ou le lien est temporairement inaccessible.")
+        st.warning(f"⚠️ Impossible de charger les données pour l'année {annee}.")
