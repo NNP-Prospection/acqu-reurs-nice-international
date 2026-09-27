@@ -10,7 +10,7 @@ page = st.sidebar.radio("Aller à la section", [
     "Analyse des Secteurs Phares (US)", 
     "Suivi des Profils Acquéreurs", 
     "📄 Générateur de Lead - Guide Retraite",
-    "📊 Analyse DVF - Nice"
+    "📊 Analyse DVF - Vraies Ventes (Ciblé)"
 ])
 
 if page == "Analyse des Secteurs Phares (US)":
@@ -41,9 +41,7 @@ elif page == "Suivi des Profils Acquéreurs":
 
 elif page == "📄 Générateur de Lead - Guide Retraite":
     st.title("📄 Générateur de Lead - Guide Retraite sur la Côte d'Azur")
-    st.markdown("Outil d'aide à la création de contenus ciblés pour attirer les investisseurs préparant leur retraite (Clientèle Française et Américaine).")
-    
-    st.markdown("### 🎯 Choisissez votre cible pour générer une trame de guide :")
+    st.markdown("Outil d'aide à la création de contenus ciblés pour attirer les investisseurs préparant leur retraite.")
     
     cible_retraite = st.radio("Clientèle visée :", ["🇫🇷 Jeunes/Futurs Retraités Français", "🇺🇸 Investisseurs Retraités Américains (US)"], horizontal=True)
     
@@ -52,60 +50,81 @@ elif page == "📄 Générateur de Lead - Guide Retraite":
         st.markdown("""
         **Trame suggérée pour le guide PDF / Article de blog :**
         1. **Introduction :** Pourquoi Nice est le choix n°1 des Français pour préparer leur retraite au soleil.
-        2. **Stratégie Patrimoniale :** 
-           - Investir tôt : L'avantage de l'amortissement LMNP (Loueur Meublé Non Professionnel).
-           - Dispositifs fiscaux : Ce qu'il faut savoir avant d'investir dans le 06.
-        3. **Secteurs d'avenir :** Les quartiers niçois où investir aujourd'hui pour une forte plus-value à la retraite (ex: Eco-Vallée, Port Lympia).
-        4. **Gestion Locative :** Comment sécuriser son investissement à distance avant d'y habiter.
-        5. **Appel à l'action (Call-to-action) :** "Prenez rendez-vous pour une étude patrimoniale personnalisée sur la Côte d'Azur."
+        2. **Stratégie Patrimoniale :** L'avantage de l'amortissement LMNP et les dispositifs fiscaux.
+        3. **Secteurs d'avenir :** Les quartiers niçois où investir aujourd'hui pour une forte plus-value.
+        4. **Gestion Locative :** Comment sécuriser son investissement à distance.
+        5. **Call-to-action :** "Prenez rendez-vous pour une étude patrimoniale personnalisée."
         """)
-        if st.button("Générer l'ébauche du texte (Version FR)"):
-            st.success("Le plan détaillé a été copié ! Vous pouvez l'exporter vers Word ou Canva pour créer votre guide.")
-
+        
     elif cible_retraite == "🇺🇸 Investisseurs Retraités Américains (US)":
-        st.info("💡 **Angle d'attaque :** Art de vivre, sécurité, vues exceptionnelles, et facilité d'installation (Le contenu ci-dessous est prêt pour vos clients US).")
+        st.info("💡 **Angle d'attaque :** Art de vivre, sécurité, vues exceptionnelles, et facilité d'installation.")
         st.markdown("""
         **Trame suggérée pour le guide PDF / Article de blog (en anglais) :**
-        1. **Introduction:** The French Riviera Dream - Why Nice is the Ultimate Retirement Destination for US Expats.
-        2. **Lifestyle & Healthcare:** Accessing world-class medical care and enjoying an unparalleled quality of life on the Riviera.
-        3. **Top Neighborhoods for US Buyers:** 
-           - *Mont Boron:* Quiet luxury, exclusivity, and panoramic sea views.
-           - *Carré d'Or:* High walkability, vibrant city life, and historic prestige.
-        4. **The Buying Process in France:** A clear, step-by-step guide for Americans (Understanding the 'Notaire' system, fund transfers, and retirement visa options).
-        5. **Call-to-Action:** "Contact your dedicated Riviera real estate expert to start your property search today."
+        1. **Introduction:** The French Riviera Dream - Why Nice is the Ultimate Retirement Destination.
+        2. **Lifestyle & Healthcare:** Accessing world-class medical care and enjoying the Riviera.
+        3. **Top Neighborhoods:** Mont Boron (Quiet luxury & Views) and Carré d'Or (Walkable & Vibrant).
+        4. **The Buying Process:** A clear guide for Americans (Notaire system, visas, etc.).
+        5. **Call-to-Action:** "Contact your dedicated Riviera real estate expert."
         """)
-        if st.button("Générer l'ébauche du texte (Version US)"):
-            st.success("Le plan détaillé en anglais a été copié ! Vous pouvez l'exporter vers Word ou Canva pour créer votre guide.")
 
-elif page == "📊 Analyse DVF - Nice":
-    st.title("📊 Analyse DVF - Ville de Nice")
-    st.markdown("Visualisez instantanément les transactions de référence sur Nice sans manipulation de fichiers.")
+elif page == "📊 Analyse DVF - Vraies Ventes (Ciblé)":
+    st.title("📊 Analyse DVF - Vraies Ventes de l'État (Nice Premium)")
+    st.markdown("Ce module interroge la base de données réelle de l'État et filtre **uniquement** vos secteurs de prédilection en analysant le nom des rues.")
     
-    @st.cache_data
-    def charger_echantillon_nice():
-        data = {
-            'date_mutation': ['2026-03-15', '2026-03-10', '2026-02-28', '2026-02-14', '2026-01-20'],
-            'nom_commune': ['Nice', 'Nice', 'Nice', 'Nice', 'Nice'],
-            'quartier_cible': ["Carré d'Or", "Promenade des Anglais", "Mont Boron", "Carré d'Or", "Promenade des Anglais"],
-            'type_local': ['Appartement', 'Appartement', 'Maison', 'Appartement', 'Appartement'],
-            'surface_reelle_bati': [85, 120, 210, 62, 145],
-            'valeur_fonciere': [920000, 1650000, 2850000, 680000, 2100000]
-        }
-        return pd.DataFrame(data)
+    annee = st.selectbox("Sélectionnez l'année d'analyse (les données de l'État sont mises à jour par semestre)", ["2026", "2025", "2024"], index=1)
+    
+    @st.cache_data(show_spinner=f"Connexion aux serveurs de l'État pour {annee}...")
+    def charger_vraies_donnees(annee_choisie):
+        url = f"https://files.data.gouv.fr/geo-dvf/latest/csv/{annee_choisie}/departements/06.csv"
+        try:
+            colonnes_utiles = ['date_mutation', 'valeur_fonciere', 'nom_commune', 'adresse_nom_voie', 'type_local', 'surface_reelle_bati']
+            df = pd.read_csv(url, usecols=lambda c: c in colonnes_utiles, low_memory=False)
+            
+            # On ne garde que Nice et les lignes avec des prix
+            df_nice = df[df['nom_commune'].str.contains('Nice', case=False, na=False)].copy()
+            df_nice = df_nice.dropna(subset=['valeur_fonciere', 'adresse_nom_voie'])
+            
+            # Fonction pour deviner le quartier selon la rue
+            def identifier_secteur(rue):
+                rue = str(rue).upper()
+                if 'ANGLAIS' in rue:
+                    return "Promenade des Anglais"
+                elif any(mot in rue for mot in ['BORON', 'ALBAN', 'BATTERIE', 'FORESTIER', 'MACCARANI']):
+                    return "Mont Boron"
+                elif any(mot in rue for mot in ['FRANCE', 'BUFFA', 'MASSENA', 'GRIMALDI', 'PARADIS', 'KARR', 'HALEVY', 'SUEDE', 'CONGRES', 'RIVOLI', 'MEDECIN', 'VICTOR HUGO']):
+                    return "Carré d'Or"
+                else:
+                    return "Hors Cible"
+            
+            df_nice['Quartier_Cible'] = df_nice['adresse_nom_voie'].apply(identifier_secteur)
+            
+            # On ne garde QUE vos 3 quartiers
+            df_premium = df_nice[df_nice['Quartier_Cible'] != "Hors Cible"]
+            
+            # Nettoyage de l'affichage
+            df_premium['valeur_fonciere'] = df_premium['valeur_fonciere'].astype(int)
+            return df_premium
+        except Exception as e:
+            return None
 
-    df = charger_echantillon_nice()
+    df_reelles = charger_vraies_donnees(annee)
 
-    if df is not None and not df.empty:
-        st.success(f"Base de données de Nice active ({len(df)} transactions clés chargées avec succès)")
+    if df_reelles is not None and not df_reelles.empty:
+        st.success(f"Vraies données chargées ! {len(df_reelles)} transactions trouvées dans vos secteurs cibles pour {annee}.")
         
-        quartiers = ["Tous"] + list(df['quartier_cible'].unique())
-        choix_q = st.selectbox("Filtrer par secteur clé", quartiers)
+        secteurs = ["Tous les secteurs cibles"] + list(df_reelles['Quartier_Cible'].unique())
+        choix_secteur = st.selectbox("Filtrer par secteur précis :", secteurs)
         
-        if choix_q != "Tous":
-            df_affiche = df[df['quartier_cible'] == choix_q]
+        if choix_secteur != "Tous les secteurs cibles":
+            df_affiche = df_reelles[df_reelles['Quartier_Cible'] == choix_secteur]
         else:
-            df_affiche = df
+            df_affiche = df_reelles
 
-        st.dataframe(df_affiche, use_container_width=True)
-        st.markdown("### 💡 Indicateur de marché")
-        st.metric("Prix moyen constaté sur la sélection", f"{int(df_affiche['valeur_fonciere'].mean()):,} €".replace(',', ' '))
+        # On affiche les données triées par date (les plus récentes d'abord)
+        st.dataframe(df_affiche.sort_values(by='date_mutation', ascending=False)[['date_mutation', 'Quartier_Cible', 'adresse_nom_voie', 'type_local', 'surface_reelle_bati', 'valeur_fonciere']], use_container_width=True)
+        
+        if not df_affiche.empty:
+            prix_moyen = int(df_affiche['valeur_fonciere'].mean())
+            st.metric(f"Prix moyen constaté (Vraies ventes {annee})", f"{prix_moyen:,} €".replace(',', ' '))
+    else:
+        st.warning(f"⚠️ Impossible de charger les vraies données de {annee}. Les serveurs de l'État sont peut-être surchargés, réessayez dans un instant.")
