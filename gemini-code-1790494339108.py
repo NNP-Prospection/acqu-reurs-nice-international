@@ -10,7 +10,7 @@ page = st.sidebar.radio("Aller à la section", [
     "Analyse des Secteurs Phares (US)", 
     "Suivi des Profils Acquéreurs", 
     "Générateur de Lead - Guide Retraite",
-    "📊 Analyse DVF - Alpes-Maritimes (06)"  # <--- Votre nouvel outil DVF intégré ici
+    "📊 Analyse DVF - Nice (Optimisée)"  # <--- Le nom a été mis à jour
 ])
 
 if page == "Analyse des Secteurs Phares (US)":
@@ -45,49 +45,46 @@ elif page == "Générateur de Lead - Guide Retraite":
     st.markdown("Outil d'aide à la création de contenus et de guides pour attirer les investisseurs américains à la retraite.")
     st.info("Module en cours de chargement...")
 
-elif page == "📊 Analyse DVF - Alpes-Maritimes (06)":
-    st.title("📊 Analyse des Valeurs Foncières (DVF) - Alpes-Maritimes (06)")
+elif page == "📊 Analyse DVF - Nice (Optimisée)":
+    st.title("📊 Analyse DVF ciblée - Ville de Nice")
     st.markdown("""
-    Cet outil analyse les données officielles des transactions notariales pour vous aider à identifier 
-    les zones dynamiques et cibler les opportunités. En cas de blocage du volume en ligne, utilisez le bouton d'import ci-dessous.
+    Cette section récupère automatiquement une version allégée des données officielles de **Nice** uniquement. 
+    Choisissez l'année ci-dessous pour lancer l'extraction.
     """)
     
-    DEFAULT_DVF_URL = "https://files.data.gouv.fr/geo-dvf/latest/csv/2023/departements/06.csv"
+    # Sélecteur d'année (2026 pourrait ne pas être encore totalement consolidé par l'État en septembre)
+    annee = st.selectbox("Sélectionnez l'année d'analyse", ["2026", "2025", "2024"], index=1)
     
-    @st.cache_data(show_spinner="Téléchargement des données DVF du 06 en cours...")
-    def charger_donnees_url(url):
+    # Construction de l'URL officielle basée sur l'année choisie
+    URL_DVF = f"https://files.data.gouv.fr/geo-dvf/latest/csv/{annee}/departements/06.csv"
+    
+    @st.cache_data(show_spinner=f"Téléchargement et filtrage ultra-rapide des données de Nice pour {annee}...")
+    def charger_donnees_nice(url):
         try:
-            return pd.read_csv(url, low_memory=False)
-        except:
+            # Astuce pour ne pas saturer la mémoire : on ne lit que les colonnes dont on a besoin
+            colonnes_utiles = ['date_mutation', 'valeur_fonciere', 'nom_commune', 'type_local', 'surface_reelle_bati']
+            
+            # Lecture du fichier
+            df = pd.read_csv(url, usecols=lambda c: c in colonnes_utiles, low_memory=False)
+            
+            # On filtre immédiatement pour ne garder QUE la ville de Nice
+            df_nice = df[df['nom_commune'].str.contains('Nice', case=False, na=False)]
+            
+            # On supprime les lignes sans valeur foncière pour nettoyer les données
+            df_nice = df_nice.dropna(subset=['valeur_fonciere'])
+            
+            return df_nice
+        except Exception as e:
             return None
 
-    df = charger_donnees_url(DEFAULT_DVF_URL)
-    data_source = "url"
-
-    if df is None or df.empty:
-        st.warning("⚠️ Le téléchargement direct en ligne est bloqué par le volume des données.")
-        data_source = "upload"
-
-    # Sécurité intégrée : Bouton de secours CSV dans la barre latérale
-    st.sidebar.markdown("---")
-    uploaded_file = st.sidebar.file_uploader("📁 Importer un fichier CSV DVF (06)", type=['csv'])
-
-    if uploaded_file is not None:
-        df = pd.read_csv(uploaded_file, low_memory=False)
-        data_source = "upload"
-        st.sidebar.success("Fichier CSV chargé avec succès !")
+    # Exécution du chargement
+    df = charger_donnees_nice(URL_DVF)
 
     if df is not None and not df.empty:
-        st.success(f"Données chargées avec succès ({len(df):,} transactions) via : **{'URL Officielle' if data_source == 'url' else 'Importation locale'}**")
+        st.success(f"Données de Nice pour {annee} chargées avec succès ! ({len(df):,} transactions immobilières trouvées)")
         
-        if 'nom_commune' in df.columns:
-            communes = sorted(df['nom_commune'].dropna().unique())
-            selected_commune = st.selectbox("Filtrer par commune", ["Toutes"] + list(communes))
-            
-            df_filtered = df if selected_commune == "Toutes" else df[df['nom_commune'] == selected_commune]
-            st.metric("Nombre de mutations affichées", f"{len(df_filtered):,}")
-            
-            colonnes_a_afficher = [c for c in ['date_mutation', 'valeur_fonciere', 'nom_commune', 'type_local', 'surface_reelle_bati'] if c in df.columns]
-            st.dataframe(df_filtered[colonnes_a_afficher].head(100), use_container_width=True)
+        # Affichage du tableau de données de Nice
+        st.dataframe(df.sort_values(by='date_mutation', ascending=False).head(100), use_container_width=True)
+        
     else:
-        st.info("💡 Veuillez importer un fichier CSV des Alpes-Maritimes via le panneau latéral pour commencer l'analyse.")
+        st.warning(f"⚠️ Les données de l'année {annee} ne sont pas encore disponibles sur les serveurs de l'État, ou le lien est temporairement inaccessible.")
