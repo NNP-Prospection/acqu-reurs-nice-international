@@ -57,7 +57,7 @@ elif page == "📊 Analyse DVF - Nice":
             'date_mutation': ['2026-03-15', '2026-03-10', '2026-02-28', '2026-02-14', '2026-01-20'],
             'nom_commune': ['Nice', 'Nice', 'Nice', 'Nice', 'Nice'],
             'quartier_cible': ["Carré d'Or", "Promenade des Anglais", "Mont Boron", "Carré d'Or", "Promenade des Anglais"],
-            'type_local': ['Appartement', 'Appartement', Maison, 'Appartement', 'Appartement'],
+            'type_local': ['Appartement', 'Appartement', 'Maison', 'Appartement', 'Appartement'],
             'surface_reelle_bati': [85, 120, 210, 62, 145],
             'valeur_fonciere': [920000, 1650000, 2850000, 680000, 2100000]
         }
