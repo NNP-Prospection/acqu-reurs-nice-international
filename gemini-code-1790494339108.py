@@ -74,16 +74,21 @@ elif page == "📊 Analyse DVF - Vraies Ventes (Ciblé)":
     annee = st.selectbox("Sélectionnez l'année d'analyse :", ["2026", "2025", "2024", "2023"], index=1)
     
     # ---------------------------------------------------------
-    # SECURITÉ : BOUTON D'IMPORTATION MANUELLE DANS LA BARRE LATÉRALE
+    # SECURITÉ : BOUTON D'IMPORTATION MANUELLE (MULTIPLE)
     # ---------------------------------------------------------
     st.sidebar.markdown("---")
-    st.sidebar.warning("📁 **Plan B (Si le serveur de l'État bloque)**")
-    uploaded_file = st.sidebar.file_uploader(f"Importez ici votre fichier 06.csv", type=['csv'])
+    st.sidebar.warning("📁 **Plan B (Import manuel)**")
+    
+    # NOUVEAUTÉ : On autorise la sélection de plusieurs fichiers (accept_multiple_files=True)
+    uploaded_files = st.sidebar.file_uploader("Importez ici vos fichiers CSV (plusieurs possibles)", type=['csv'], accept_multiple_files=True)
 
     colonnes_utiles = ['date_mutation', 'valeur_fonciere', 'nom_commune', 'adresse_nom_voie', 'type_local', 'surface_reelle_bati']
 
-    # Fonction pour filtrer et nettoyer les données (utilisée en auto et en manuel)
     def filtrer_nice_premium(df_brut):
+        # On s'assure d'avoir la colonne des communes pour éviter les erreurs
+        if 'nom_commune' not in df_brut.columns:
+            return pd.DataFrame()
+            
         df_nice = df_brut[df_brut['nom_commune'].str.contains('Nice', case=False, na=False)].copy()
         df_nice = df_nice.dropna(subset=['valeur_fonciere', 'adresse_nom_voie'])
         
@@ -115,12 +120,18 @@ elif page == "📊 Analyse DVF - Vraies Ventes (Ciblé)":
 
     df_reelles = None
     
-    # Choix de la source : Fichier uploadé OU téléchargement automatique
-    if uploaded_file is not None:
+    # Choix de la source : Fichiers uploadés OU téléchargement automatique
+    if uploaded_files: # S'il y a au moins un fichier
         try:
-            df_raw = pd.read_csv(uploaded_file, usecols=lambda c: c in colonnes_utiles, low_memory=False)
+            liste_dfs = []
+            for file in uploaded_files:
+                df_temp = pd.read_csv(file, usecols=lambda c: c in colonnes_utiles, low_memory=False)
+                liste_dfs.append(df_temp)
+            
+            # On regroupe tous les fichiers ensemble (concaténation)
+            df_raw = pd.concat(liste_dfs, ignore_index=True)
             df_reelles = filtrer_nice_premium(df_raw)
-            st.success("Données chargées avec succès depuis votre fichier manuel !")
+            st.sidebar.success(f"{len(uploaded_files)} fichier(s) combiné(s) avec succès !")
         except Exception as e:
             st.error("Erreur de lecture du fichier. Vérifiez qu'il s'agit bien d'un fichier DVF.")
     else:
@@ -144,8 +155,5 @@ elif page == "📊 Analyse DVF - Vraies Ventes (Ciblé)":
             prix_moyen = int(df_affiche['valeur_fonciere'].mean())
             st.metric(f"Prix moyen constaté dans la sélection", f"{prix_moyen:,} €".replace(',', ' '))
             
-    elif uploaded_file is None:
+    elif not uploaded_files:
         st.error(f"Impossible de récupérer automatiquement les données de {annee}.")
-        st.info("💡 **Solution express :**")
-        st.markdown(f"1. **[Cliquez ici pour télécharger le fichier officiel 06.csv (Année {annee})](https://files.data.gouv.fr/geo-dvf/latest/csv/{annee}/departements/06.csv)**")
-        st.markdown("2. Une fois téléchargé, glissez-le simplement dans la zone **'Plan B'** dans le menu gris à gauche.")
