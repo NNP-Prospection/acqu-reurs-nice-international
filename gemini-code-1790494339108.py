@@ -69,50 +69,28 @@ elif page == "📄 Générateur de Lead - Guide Retraite":
 
 elif page == "📊 Analyse DVF - Import Local (06)":
     st.title("📊 Analyse DVF - Importation de vos fichiers locaux")
-    st.markdown("Importez votre extrait CSV de données DVF pour analyser instantanément les transactions de Nice et de vos secteurs cibles.")
+    st.markdown("Importez votre fichier CSV pour analyser instantanément les transactions.")
     
-    # type=None supprime le filtre restrictif du navigateur et dégrise les fichiers sur tablette
-    uploaded_file = st.file_uploader("📁 Sélectionnez votre fichier DVF", type=None)
+    uploaded_file = st.file_uploader("📁 Sélectionnez votre fichier CSV", type=None)
 
     if uploaded_file is not None:
         try:
-            with st.spinner("Traitement du fichier en cours..."):
-                colonnes = ['date_mutation', 'valeur_fonciere', 'nom_commune', 'adresse_nom_voie', 'type_local', 'surface_reelle_bati']
-                df_brut = pd.read_csv(uploaded_file, usecols=lambda c: c in colonnes, low_memory=False)
+            with st.spinner("Lecture du fichier en cours..."):
+                # Lecture tolérante de tous les types de CSV sans bloquer sur les colonnes
+                df_brut = pd.read_csv(uploaded_file, low_memory=False, on_bad_lines='skip')
                 
-                df_nice = df_brut[df_brut['nom_commune'].str.contains('Nice', case=False, na=False)].copy()
-                df_nice = df_nice.dropna(subset=['valeur_fonciere', 'adresse_nom_voie'])
-                
-                def identifier_secteur(rue):
-                    rue = str(rue).upper()
-                    if 'ANGLAIS' in rue:
-                        return "Promenade des Anglais"
-                    elif any(mot in rue for mot in ['BORON', 'ALBAN', 'BATTERIE', 'FORESTIER', 'MACCARANI']):
-                        return "Mont Boron"
-                    elif any(mot in rue for mot in ['FRANCE', 'BUFFA', 'MASSENA', 'GRIMALDI', 'PARADIS', 'KARR', 'HALEVY', 'SUEDE', 'CONGRES', 'RIVOLI', 'MEDECIN', 'VICTOR HUGO']):
-                        return "Carré d'Or"
-                    else:
-                        return "Hors Cible"
-                
-                df_nice['Secteur_Cible'] = df_nice['adresse_nom_voie'].apply(identifier_secteur)
-                df_filtered = df_nice[df_nice['Secteur_Cible'] != "Hors Cible"].copy()
-                df_filtered['valeur_fonciere'] = df_filtered['valeur_fonciere'].astype(int)
-                
-            if not df_filtered.empty:
-                st.success(f"✅ Fichier analysé avec succès ! {len(df_filtered):,} transactions pertinentes trouvées dans vos secteurs cibles.")
-                
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.metric("Transactions ciblées affichées", f"{len(df_filtered):,}")
-                with col2:
-                    prix_moyen = int(df_filtered['valeur_fonciere'].mean())
-                    st.metric("Prix moyen sur les secteurs cibles", f"{prix_moyen:,} €".replace(',', ' '))
-                
-                st.dataframe(df_filtered.sort_values(by='date_mutation', ascending=False), use_container_width=True)
-            else:
-                st.warning("⚠️ Ce fichier ne contient pas de transactions correspondant aux rues de vos secteurs cibles (Carré d'Or, Promenade, Mont Boron). Essayez un autre fichier de votre dossier.")
-                
+            st.success(f"Fichier chargé avec succès ! ({len(df_brut):,} lignes trouvées).")
+            
+            # Affichage direct de l'aperçu pour que vous puissiez voir ce que contient le fichier
+            st.markdown("### 🔍 Aperçu du contenu du fichier :")
+            st.dataframe(df_brut.head(50), use_container_width=True)
+            
+            # Si le fichier contient des données de commune ou d'adresse, on tente le filtrer
+            colonnes_str = " ".join(df_brut.columns).lower()
+            if 'commune' in colonnes_str or 'voie' in colonnes_str or 'valeur' in colonnes_str:
+                st.info("💡 Ce fichier semble bien correspondre à des données foncières.")
+            
         except Exception as e:
-            st.error("⚠️ Erreur lors de la lecture du fichier. Assurez-vous qu'il s'agit bien d'un fichier CSV DVF valide.")
+            st.error(f"⚠️ Erreur de lecture : {e}")
     else:
-        st.info("💡 Cliquez sur le bouton ci-dessus : vos fichiers ne seront plus grisés et vous pourrez les sélectionner.")
+        st.info("💡 Sélectionnez un fichier CSV depuis votre tablette pour l'analyser.")
